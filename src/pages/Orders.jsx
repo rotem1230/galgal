@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Product } from "@/api/entities";
 import { Order } from "@/api/entities";
@@ -7,7 +6,7 @@ import { Customer } from "@/api/entities";
 import { CustomerPricing } from "@/api/entities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import {
   Select,
   SelectContent,
@@ -36,6 +35,8 @@ import {
   Filter,
   CalendarRange,
   Trash2,
+  Receipt,
+  ExternalLink
 } from "lucide-react";
 import {
   Tabs,
@@ -86,6 +87,7 @@ export default function OrdersPage() {
   const [isExporting, setIsExporting] = useState(false);
   
   const [searchQuery, setSearchQuery] = useState("");
+  const [orderIdQuery, setOrderIdQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [showProductPicker, setShowProductPicker] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -99,6 +101,7 @@ export default function OrdersPage() {
   const [dateRange, setDateRange] = useState({ from: null, to: null });
   const [customerFilter, setCustomerFilter] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  const [selectedCustomerId, setSelectedCustomerId] = useState("");
 
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -107,6 +110,9 @@ export default function OrdersPage() {
   
   const [customerPricing, setCustomerPricing] = useState([]);
   const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
+  const [selectedOrderForInvoice, setSelectedOrderForInvoice] = useState(null);
+  const [isCreatingInvoice, setIsCreatingInvoice] = useState(false);
+  const [invoiceDialogOpen, setInvoiceDialogOpen] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -167,6 +173,14 @@ export default function OrdersPage() {
       );
 
   const filteredOrders = orders.filter((order) => {
+    if (orderIdQuery && !order.id.includes(orderIdQuery)) {
+      return false;
+    }
+    
+    if (selectedCustomerId && order.customer_id !== selectedCustomerId) {
+      return false;
+    }
+    
     const orderDate = new Date(order.order_date);
     const orderMonth = orderDate.getMonth();
     const orderYear = orderDate.getFullYear();
@@ -200,6 +214,8 @@ export default function OrdersPage() {
   const resetFilters = () => {
     setDateRange({ from: null, to: null });
     setCustomerFilter("");
+    setOrderIdQuery("");
+    setSelectedCustomerId("");
   };
 
   const handleProductSelect = (product) => {
@@ -316,7 +332,49 @@ export default function OrdersPage() {
     try {
       const orderData = { ...newOrder };
       
-      await Order.create(orderData);
+      // יצירת ההזמנה במערכת
+      const createdOrder = await Order.create(orderData);
+      
+      // יצירת חשבונית ב-iCount (אם הוגדר)
+      try {
+        // ייבוא מודול iCount API
+        const iCountAPI = await import("@/api/icount");
+        
+        // בדיקה אם החיבור ל-iCount מוגדר
+        const isConnected = await iCountAPI.testIcountConnection();
+        
+        if (isConnected) {
+          // יצירת או עדכון הלקוח ב-iCount
+          const customerData = {
+            name: orderData.customer_name,
+            email: orderData.customer_email || "",
+            phone: orderData.customer_phone || "",
+            address: orderData.customer_address || ""
+          };
+          
+          const clientId = await iCountAPI.createOrUpdateClient(customerData);
+          
+          // יצירת החשבונית
+          const invoiceData = await iCountAPI.createInvoice({
+            id: createdOrder.id,
+            items: orderData.items,
+            paymentMethod: orderData.payment_method || "CREDIT"
+          }, clientId);
+          
+          // עדכון ההזמנה עם פרטי החשבונית
+          await Order.update(createdOrder.id, {
+            icount_invoice_id: invoiceData.invoiceId,
+            icount_invoice_number: invoiceData.invoiceNumber,
+            icount_invoice_url: invoiceData.invoiceUrl
+          });
+          
+          console.log(`חשבונית נוצרה בהצלחה ב-iCount, מספר: ${invoiceData.invoiceNumber}`);
+        }
+      } catch (icountError) {
+        console.error("שגיאה ביצירת חשבונית ב-iCount:", icountError);
+        // לא מחזירים שגיאה למשתמש - היצירה צריכה להצליח גם אם יצירת החשבונית נכשלה
+      }
+      
       setIsAddOpen(false);
       setNewOrder({
         customer_name: "",
@@ -952,6 +1010,60 @@ export default function OrdersPage() {
     setQuantityToAdd(value);
   };
 
+  // פונקציה ליצירת חשבונית עבור הזמנה קיימת
+  const createOrderInvoice = async (order) => {
+    setIsCreatingInvoice(true);
+    
+    try {
+      // ייבוא מודול iCount API
+      const iCountAPI = await import("@/api/icount");
+      
+      // בדיקה אם החיבור ל-iCount מוגדר
+      const isConnected = await iCountAPI.testIcountConnection();
+      
+      if (!isConnected) {
+        alert("החיבור ל-iCount אינו מוגדר או אינו תקין. בדוק את ההגדרות בדף 'הגדרות iCount'.");
+        return;
+      }
+      
+      // יצירת או עדכון הלקוח ב-iCount
+      const customerData = {
+        name: order.customer_name,
+        email: order.customer_email || "",
+        phone: order.customer_phone || "",
+        address: order.customer_address || ""
+      };
+      
+      const clientId = await iCountAPI.createOrUpdateClient(customerData);
+      
+      // יצירת החשבונית
+      const invoiceData = await iCountAPI.createInvoice({
+        id: order.id,
+        items: order.items,
+        paymentMethod: order.payment_method || "CREDIT"
+      }, clientId);
+      
+      // עדכון ההזמנה עם פרטי החשבונית
+      await Order.update(order.id, {
+        icount_invoice_id: invoiceData.invoiceId,
+        icount_invoice_number: invoiceData.invoiceNumber,
+        icount_invoice_url: invoiceData.invoiceUrl
+      });
+      
+      // רענון הנתונים
+      await loadData();
+      
+      alert(`חשבונית נוצרה בהצלחה ב-iCount, מספר: ${invoiceData.invoiceNumber}`);
+      setInvoiceDialogOpen(false);
+    } catch (error) {
+      console.error("שגיאה ביצירת חשבונית:", error);
+      alert(`שגיאה ביצירת חשבונית: ${error.message}`);
+    } finally {
+      setIsCreatingInvoice(false);
+      setSelectedOrderForInvoice(null);
+    }
+  };
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
@@ -987,97 +1099,108 @@ export default function OrdersPage() {
         </div>
       </div>
 
-      <div className="flex gap-4 mb-6 flex-wrap">
-        <Select value={selectedMonth.toString()} onValueChange={(value) => setSelectedMonth(parseInt(value))}>
-          <SelectTrigger className="w-32">
-            <SelectValue placeholder="בחר חודש" />
-          </SelectTrigger>
-          <SelectContent>
-            {Array.from({ length: 12 }, (_, i) => (
-              <SelectItem key={i} value={i.toString()}>
-                {new Date(2000, i, 1).toLocaleString('he-IL', { month: 'long' })}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="mb-6 flex flex-wrap items-center gap-2">
+        {/* חיפוש לפי מספר הזמנה */}
+        <div className="flex-1 min-w-[250px]">
+          <Input
+            placeholder="חפש לפי מספר הזמנה..."
+            value={orderIdQuery}
+            onChange={(e) => setOrderIdQuery(e.target.value)}
+            className="w-full"
+          />
+        </div>
 
-        <Select value={selectedYear.toString()} onValueChange={(value) => setSelectedYear(parseInt(value))}>
-          <SelectTrigger className="w-32">
-            <SelectValue placeholder="בחר שנה" />
-          </SelectTrigger>
-          <SelectContent>
-            {getAvailableYears().map((year) => (
-              <SelectItem key={year} value={year.toString()}>
-                {year}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Button
+          variant="outline"
+          size="icon"
+          onClick={() => setIsFilterOpen(true)}
+          className="ml-auto"
+        >
+          <Filter className="h-4 w-4" />
+        </Button>
+        
+        <Button variant="outline" onClick={() => setShowFilters(!showFilters)}>
+          {showFilters ? "הסתר סינון" : "הצג סינון מתקדם"}
+        </Button>
+        
+        <Button variant="default" onClick={() => setIsAddOpen(true)}>
+          <Plus className="h-4 w-4 ml-2" />
+          הזמנה חדשה
+        </Button>
       </div>
 
       {showFilters && (
-        <div className="bg-gray-50 p-4 rounded-lg mb-6">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-medium">סינון הזמנות</h3>
-            <Button variant="ghost" size="sm" onClick={resetFilters}>
-              נקה סינון
-            </Button>
-          </div>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="mb-6 p-4 bg-gray-50 rounded-lg border">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <div>
-              <label className="block text-sm font-medium mb-1">לקוח</label>
-              <Input
-                placeholder="סנן לפי שם לקוח..."
-                value={customerFilter}
-                onChange={(e) => setCustomerFilter(e.target.value)}
-              />
+              <label className="text-sm font-medium mb-1 block">חודש</label>
+              <Select
+                value={selectedMonth.toString()}
+                onValueChange={(value) => setSelectedMonth(parseInt(value))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">ינואר</SelectItem>
+                  <SelectItem value="1">פברואר</SelectItem>
+                  <SelectItem value="2">מרץ</SelectItem>
+                  <SelectItem value="3">אפריל</SelectItem>
+                  <SelectItem value="4">מאי</SelectItem>
+                  <SelectItem value="5">יוני</SelectItem>
+                  <SelectItem value="6">יולי</SelectItem>
+                  <SelectItem value="7">אוגוסט</SelectItem>
+                  <SelectItem value="8">ספטמבר</SelectItem>
+                  <SelectItem value="9">אוקטובר</SelectItem>
+                  <SelectItem value="10">נובמבר</SelectItem>
+                  <SelectItem value="11">דצמבר</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             
             <div>
-              <label className="block text-sm font-medium mb-1">טווח תאריכים</label>
-              <div className="flex gap-2">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={`w-full justify-start text-right ${!dateRange.from ? 'text-muted-foreground' : ''}`}
-                    >
-                      <CalendarRange className="ml-2 h-4 w-4" />
-                      {dateRange.from ? format(dateRange.from, 'dd/MM/yyyy') : 'מתאריך...'}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={dateRange.from}
-                      onSelect={(date) => setDateRange({ ...dateRange, from: date })}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      className={`w-full justify-start text-right ${!dateRange.to ? 'text-muted-foreground' : ''}`}
-                    >
-                      <CalendarRange className="ml-2 h-4 w-4" />
-                      {dateRange.to ? format(dateRange.to, 'dd/MM/yyyy') : 'עד תאריך...'}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={dateRange.to}
-                      onSelect={(date) => setDateRange({ ...dateRange, to: date })}
-                      initialFocus
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
+              <label className="text-sm font-medium mb-1 block">שנה</label>
+              <Select
+                value={selectedYear.toString()}
+                onValueChange={(value) => setSelectedYear(parseInt(value))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {getAvailableYears().map((year) => (
+                    <SelectItem key={year} value={year.toString()}>
+                      {year}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+            
+            <div>
+              <label className="text-sm font-medium mb-1 block">לקוח</label>
+              <Select
+                value={selectedCustomerId}
+                onValueChange={setSelectedCustomerId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="כל הלקוחות" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">כל הלקוחות</SelectItem>
+                  {customers.map((customer) => (
+                    <SelectItem key={customer.id} value={customer.id}>
+                      {customer.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          
+          <div className="flex justify-end">
+            <Button variant="outline" onClick={resetFilters} className="ml-2">איפוס</Button>
+            <Button onClick={() => setShowFilters(false)}>סגור</Button>
           </div>
         </div>
       )}
@@ -1168,6 +1291,29 @@ export default function OrdersPage() {
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
+                        {/* כפתור צפייה/יצירת חשבונית */}
+                        {order.icount_invoice_url ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => window.open(order.icount_invoice_url, '_blank')}
+                          >
+                            <ExternalLink className="w-4 h-4 ml-2" />
+                            צפה בחשבונית
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedOrderForInvoice(order);
+                              setInvoiceDialogOpen(true);
+                            }}
+                          >
+                            <Receipt className="w-4 h-4 ml-2" />
+                            צור חשבונית
+                          </Button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1471,6 +1617,45 @@ export default function OrdersPage() {
               </CommandGroup>
             </CommandList>
           </CommandDialog>
+
+          {/* Dialog ליצירת חשבונית */}
+          <Dialog open={invoiceDialogOpen} onOpenChange={setInvoiceDialogOpen}>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>יצירת חשבונית עבור הזמנה #{selectedOrderForInvoice?.id.slice(-8)}</DialogTitle>
+              </DialogHeader>
+              <div className="py-4">
+                {selectedOrderForInvoice && (
+                  <>
+                    <p className="mb-4">
+                      האם ברצונך ליצור חשבונית עבור הזמנה #{selectedOrderForInvoice.id.slice(-8)}?
+                    </p>
+                    <p className="text-sm text-gray-500 mb-2">
+                      פרטים:
+                    </p>
+                    <ul className="text-sm text-gray-500 space-y-1 mb-4">
+                      <li>לקוח: {selectedOrderForInvoice.customer_name}</li>
+                      <li>תאריך: {new Date(selectedOrderForInvoice.order_date).toLocaleDateString('he-IL')}</li>
+                      <li>סכום: ₪{selectedOrderForInvoice.total_with_vat.toFixed(2)}</li>
+                      <li>מס׳ פריטים: {selectedOrderForInvoice.items.length}</li>
+                    </ul>
+                    <p className="text-sm text-gray-500">
+                      החשבונית תיווצר במערכת iCount ותקושר להזמנה זו.
+                    </p>
+                  </>
+                )}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setInvoiceDialogOpen(false)}>ביטול</Button>
+                <Button 
+                  onClick={() => createOrderInvoice(selectedOrderForInvoice)}
+                  disabled={isCreatingInvoice || !selectedOrderForInvoice}
+                >
+                  {isCreatingInvoice ? 'יוצר חשבונית...' : 'צור חשבונית'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </>
       )}
     </div>

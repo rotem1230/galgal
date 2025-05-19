@@ -1,8 +1,8 @@
-
 import React, { useState, useEffect } from "react";
 import { Customer } from "@/api/entities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import {
   Dialog,
@@ -12,7 +12,7 @@ import {
   DialogFooter,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, Pencil, Trash2, Phone, Mail, MapPin } from "lucide-react";
+import { Plus, Pencil, Trash2, Phone, Mail, MapPin, AlertCircle } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { CustomerPricing } from "@/api/entities";
 import { Product } from "@/api/entities";
@@ -33,6 +33,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { createUserWithEmailAndPassword } from "firebase/auth";
+import { auth } from "@/firebase-config";
+import { toast } from "sonner";
 
 export default function CustomersPage() {
   const [customers, setCustomers] = useState([]);
@@ -45,8 +48,11 @@ export default function CustomersPage() {
     address: "",
     notes: ""
   });
+  const [newUserPassword, setNewUserPassword] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [formError, setFormError] = useState(null);
   const [isCustomPricingOpen, setIsCustomPricingOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [products, setProducts] = useState([]);
@@ -75,6 +81,7 @@ export default function CustomersPage() {
       setCustomerPricing(pricingData);
     } catch (error) {
       console.error("Error loading data:", error);
+      toast.error("שגיאה בטעינת הנתונים");
     } finally {
       setIsLoading(false);
     }
@@ -86,8 +93,8 @@ export default function CustomersPage() {
       setCustomers(data);
     } catch (error) {
       console.error("Error loading customers:", error);
+      toast.error("שגיאה בטעינת הלקוחות");
     } finally {
-      setIsLoading(false);
     }
   };
 
@@ -125,8 +132,10 @@ export default function CustomersPage() {
       }
 
       await loadData();
+      toast.success("המחיר המותאם נשמר בהצלחה");
     } catch (error) {
       console.error("Error saving custom price:", error);
+      toast.error("שגיאה בשמירת המחיר המותאם");
     }
   };
 
@@ -149,9 +158,11 @@ export default function CustomersPage() {
       if (pricing) {
         await CustomerPricing.delete(pricing.id);
         await loadData();
+        toast.success("המחיר המותאם נמחק");
       }
     } catch (error) {
       console.error("Error deleting custom price:", error);
+      toast.error("שגיאה במחיקת המחיר המותאם");
     }
   };
 
@@ -165,40 +176,91 @@ export default function CustomersPage() {
     return matchesCategory && matchesSearch;
   });
 
-  const handleSubmit = async () => {
+  const resetFormAndCloseDialog = () => {
+    setIsAddOpen(false);
+    setEditingCustomer(null);
+    setNewCustomer({ name: "", phone: "", email: "", address: "", notes: "" });
+    setNewUserPassword("");
+    setFormError(null);
+    setIsSaving(false);
+  };
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+    setFormError(null);
+    setIsSaving(true);
+    let customerAuthUid = null;
+
     try {
-      if (editingCustomer) {
-        await Customer.update(editingCustomer.id, newCustomer);
-      } else {
-        await Customer.create(newCustomer);
+      if (!editingCustomer && newCustomer.email && newUserPassword) {
+        try {
+          const userCredential = await createUserWithEmailAndPassword(auth, newCustomer.email, newUserPassword);
+          customerAuthUid = userCredential.user.uid;
+          console.log("Firebase user created with UID:", customerAuthUid);
+          toast.info(`משתמש Firebase נוצר עבור ${newCustomer.email}`);
+        } catch (error) {
+          console.error("Firebase user creation failed:", error);
+          let firebaseErrorMsg = "שגיאה ביצירת משתמש התחברות.";
+          if (error.code === 'auth/email-already-in-use') {
+            firebaseErrorMsg = "כתובת האימייל כבר קיימת במערכת ההתחברות.";
+          } else if (error.code === 'auth/invalid-email') {
+            firebaseErrorMsg = "כתובת האימייל אינה תקינה.";
+          } else if (error.code === 'auth/weak-password') {
+            firebaseErrorMsg = "הסיסמה חלשה מדי. נדרשים לפחות 6 תווים.";
+          }
+          setFormError(firebaseErrorMsg + " הלקוח לא נשמר.");
+          setIsSaving(false);
+          return;
+        }
       }
-      setIsAddOpen(false);
-      setEditingCustomer(null);
-      setNewCustomer({
-        name: "",
-        phone: "",
-        email: "",
-        address: "",
-        notes: ""
-      });
-      loadCustomers();
+
+      const customerDataToSave = { ...newCustomer };
+      if (customerAuthUid) { customerDataToSave.authUid = customerAuthUid; }
+      
+      if (editingCustomer) {
+        await Customer.update(editingCustomer.id, customerDataToSave);
+        toast.success(`לקוח '${customerDataToSave.name}' עודכן בהצלחה!`);
+      } else {
+        await Customer.create(customerDataToSave);
+         toast.success(`לקוח '${customerDataToSave.name}' נוצר בהצלחה!`);
+      }
+
+      resetFormAndCloseDialog();
+      await loadCustomers();
+
     } catch (error) {
       console.error("Error saving customer:", error);
+      setFormError("שגיאה בשמירת הלקוח. בדוק את הקונסול לפרטים.");
+      toast.error("שגיאה בשמירת הלקוח");
+      setIsSaving(false);
     }
   };
 
   const handleEdit = (customer) => {
     setEditingCustomer(customer);
-    setNewCustomer(customer);
+    setNewCustomer({ 
+      name: customer.name || "", 
+      phone: customer.phone || "", 
+      email: customer.email || "", 
+      address: customer.address || "", 
+      notes: customer.notes || ""
+    });
+    setNewUserPassword("");
+    setFormError(null);
     setIsAddOpen(true);
   };
 
-  const handleDelete = async (customerId) => {
+  const handleDelete = async (customerId, customerName) => {
+    if (!window.confirm(`האם אתה בטוח שברצונך למחוק את הלקוח '${customerName}'?`)) {
+        return;
+    }
     try {
       await Customer.delete(customerId);
-      loadCustomers();
+      toast.success(`לקוח '${customerName}' נמחק בהצלחה`);
+      await loadCustomers();
     } catch (error) {
       console.error("Error deleting customer:", error);
+      toast.error("שגיאה במחיקת הלקוח");
     }
   };
 
@@ -206,7 +268,13 @@ export default function CustomersPage() {
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold">לקוחות</h1>
-        <Button onClick={() => setIsAddOpen(true)}>
+        <Button onClick={() => {
+          setEditingCustomer(null);
+          setNewCustomer({ name: "", phone: "", email: "", address: "", notes: "" });
+          setNewUserPassword("");
+          setFormError(null);
+          setIsAddOpen(true);
+        }}>
           <Plus className="w-4 h-4 ml-2" />
           לקוח חדש
         </Button>
@@ -228,236 +296,219 @@ export default function CustomersPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredCustomers.map((customer) => (
-            <Card key={customer.id} className="p-4">
-              <div className="flex justify-between items-start">
-                <div>
-                  <h3 className="font-bold text-lg">{customer.name}</h3>
-                  {customer.phone && (
-                    <p className="flex items-center text-gray-600 mt-2">
-                      <Phone className="w-4 h-4 ml-2" />
-                      {customer.phone}
-                    </p>
-                  )}
-                  {customer.email && (
-                    <p className="flex items-center text-gray-600 mt-1">
-                      <Mail className="w-4 h-4 ml-2" />
-                      {customer.email}
-                    </p>
-                  )}
-                  {customer.address && (
-                    <p className="flex items-center text-gray-600 mt-1">
-                      <MapPin className="w-4 h-4 ml-2" />
-                      {customer.address}
-                    </p>
-                  )}
-                  {customer.notes && (
-                    <p className="mt-2 text-gray-600 text-sm">{customer.notes}</p>
-                  )}
+            <Card key={customer.id} className="p-4 flex flex-col justify-between">
+              <div>
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h3 className="font-bold text-lg">{customer.name}</h3>
+                    {customer.phone && (
+                      <p className="flex items-center text-gray-600 mt-2">
+                        <Phone className="w-4 h-4 ml-2" /> {customer.phone}
+                      </p>
+                    )}
+                    {customer.email && (
+                      <p className="flex items-center text-gray-600 mt-1">
+                        <Mail className="w-4 h-4 ml-2" /> {customer.email}
+                      </p>
+                    )}
+                    {customer.address && (
+                      <p className="flex items-center text-gray-600 mt-1">
+                        <MapPin className="w-4 h-4 ml-2" /> {customer.address}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex space-x-2 space-x-reverse">
+                    <Button variant="outline" size="icon" onClick={() => handleEdit(customer)}>
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                    <Button variant="destructive" size="icon" onClick={() => handleDelete(customer.id, customer.name)}>
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleCustomPricing(customer)}
-                  >
-                    מחירים מותאמים
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleEdit(customer)}
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => handleDelete(customer.id)}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
+                {customer.notes && (
+                  <div className="mb-4">
+                    <p className="text-sm text-gray-500">הערות:</p>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{customer.notes}</p>
+                  </div>
+                )}
               </div>
+              <Button 
+                variant="secondary" 
+                className="w-full mt-auto" 
+                onClick={() => handleCustomPricing(customer)}
+              >
+                תמחור מותאם אישית
+              </Button>
             </Card>
           ))}
         </div>
       )}
 
-      <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-        <DialogContent>
+      <Dialog open={isAddOpen} onOpenChange={resetFormAndCloseDialog}>
+        <DialogContent className="sm:max-w-[425px]" dir="rtl">
           <DialogHeader>
-            <DialogTitle>
-              {editingCustomer ? "עריכת לקוח" : "הוספת לקוח חדש"}
-            </DialogTitle>
+            <DialogTitle>{editingCustomer ? "עריכת לקוח" : "הוספת לקוח חדש"}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">שם</label>
-              <Input
-                value={newCustomer.name}
-                onChange={(e) =>
-                  setNewCustomer({ ...newCustomer, name: e.target.value })
-                }
-                placeholder="הכנס שם"
-              />
+          <form onSubmit={handleSubmit}>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="name" className="text-right col-span-1">שם</Label>
+                <Input 
+                  id="name" 
+                  value={newCustomer.name}
+                  onChange={(e) => setNewCustomer({ ...newCustomer, name: e.target.value })}
+                  className="col-span-3" 
+                  required 
+                  disabled={isSaving}
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="phone" className="text-right col-span-1">טלפון</Label>
+                <Input 
+                  id="phone" 
+                  value={newCustomer.phone} 
+                  onChange={(e) => setNewCustomer({ ...newCustomer, phone: e.target.value })}
+                  className="col-span-3" 
+                  disabled={isSaving}
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="email" className="text-right col-span-1">אימייל</Label>
+                <Input 
+                  id="email" 
+                  type="email"
+                  value={newCustomer.email}
+                  onChange={(e) => setNewCustomer({ ...newCustomer, email: e.target.value })} 
+                  className="col-span-3" 
+                  disabled={isSaving}
+                />
+              </div>
+              {!editingCustomer && (
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="password" className="text-right col-span-1">סיסמה</Label>
+                  <Input 
+                    id="password"
+                    type="password"
+                    placeholder="(אופציונלי ליצירת התחברות)"
+                    value={newUserPassword} 
+                    onChange={(e) => setNewUserPassword(e.target.value)} 
+                    className="col-span-3" 
+                    disabled={isSaving}
+                  />
+                </div>
+              )}
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="address" className="text-right col-span-1">כתובת</Label>
+                <Input 
+                  id="address" 
+                  value={newCustomer.address}
+                  onChange={(e) => setNewCustomer({ ...newCustomer, address: e.target.value })} 
+                  className="col-span-3" 
+                  disabled={isSaving}
+                />
+              </div>
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="notes" className="text-right col-span-1">הערות</Label>
+                <Textarea 
+                  id="notes" 
+                  value={newCustomer.notes}
+                  onChange={(e) => setNewCustomer({ ...newCustomer, notes: e.target.value })} 
+                  className="col-span-3" 
+                  disabled={isSaving}
+                />
+              </div>
+              {formError && (
+                <div className="col-span-4 flex items-center text-sm text-red-600 bg-red-50 p-3 rounded-md">
+                  <AlertCircle className="w-4 h-4 ml-2 flex-shrink-0" />
+                  <span>{formError}</span>
+                </div>
+              )}
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">טלפון</label>
-              <Input
-                value={newCustomer.phone}
-                onChange={(e) =>
-                  setNewCustomer({ ...newCustomer, phone: e.target.value })
-                }
-                placeholder="הכנס מספר טלפון"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">אימייל</label>
-              <Input
-                value={newCustomer.email}
-                onChange={(e) =>
-                  setNewCustomer({ ...newCustomer, email: e.target.value })
-                }
-                placeholder="הכנס כתובת אימייל"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">כתובת</label>
-              <Input
-                value={newCustomer.address}
-                onChange={(e) =>
-                  setNewCustomer({ ...newCustomer, address: e.target.value })
-                }
-                placeholder="הכנס כתובת"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">הערות</label>
-              <Textarea
-                value={newCustomer.notes}
-                onChange={(e) =>
-                  setNewCustomer({ ...newCustomer, notes: e.target.value })
-                }
-                placeholder="הכנס הערות"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button onClick={handleSubmit} disabled={!newCustomer.name}>
-              {editingCustomer ? "שמור שינויים" : "צור לקוח"}
-            </Button>
-          </DialogFooter>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={resetFormAndCloseDialog} disabled={isSaving}>ביטול</Button>
+              <Button type="submit" disabled={isSaving}>
+                {isSaving ? "שומר..." : (editingCustomer ? "שמור שינויים" : "צור לקוח")}
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isCustomPricingOpen} onOpenChange={setIsCustomPricingOpen}>
-        <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-hidden">
+        <DialogContent className="max-w-4xl" dir="rtl">
           <DialogHeader>
-            <DialogTitle>מחירים מותאמים ללקוח - {selectedCustomer?.name}</DialogTitle>
+            <DialogTitle>תמחור מותאם אישית עבור: {selectedCustomer?.name}</DialogTitle>
           </DialogHeader>
-          
-          <div className="mt-4 space-y-4">
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Input
-                placeholder="חיפוש מוצרים..."
-                value={customSearchQuery}
-                onChange={(e) => setCustomSearchQuery(e.target.value)}
-                className="flex-1"
-              />
-              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                <SelectTrigger className="w-full sm:w-40">
-                  <SelectValue placeholder="כל הקטגוריות" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">כל הקטגוריות</SelectItem>
-                  {categories.map((category) => (
-                    <SelectItem key={category.id} value={category.id}>
-                      {category.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <ScrollArea className="h-[60vh]">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>מוצר</TableHead>
-                    <TableHead>קטגוריה</TableHead>
-                    <TableHead>מחיר רגיל</TableHead>
-                    <TableHead>מחיר מותאם</TableHead>
-                    <TableHead>פעולות</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredProducts.map((product) => {
-                    const category = categories.find(c => c.id === product.category_id);
-                    const baseCustomPrice = getCustomPrice(product.id);
-                    
-                    return (
-                      <React.Fragment key={product.id}>
-                        <TableRow>
-                          <TableCell>{product.name}</TableCell>
-                          <TableCell>{category?.name}</TableCell>
-                          <TableCell>₪{product.price_with_vat}</TableCell>
-                          <TableCell>
-                            <Input
-                              type="number"
-                              placeholder="הזן מחיר כולל מע״מ"
-                              defaultValue={baseCustomPrice?.price_with_vat || ""}
-                              onChange={(e) => saveCustomPrice(product, e.target.value)}
-                              className="w-32"
-                            />
-                          </TableCell>
-                          <TableCell>
-                            {baseCustomPrice && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => deleteCustomPrice(product.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            )}
-                          </TableCell>
-                        </TableRow>
-                        {product.variations?.map((variation, index) => (
-                          <TableRow key={`${product.id}-${index}`} className="bg-gray-50">
-                            <TableCell className="pl-8">
-                              {variation.name}
-                            </TableCell>
-                            <TableCell></TableCell>
-                            <TableCell>₪{variation.price_with_vat}</TableCell>
-                            <TableCell>
-                              <Input
-                                type="number"
-                                placeholder="הזן מחיר כולל מע״מ"
-                                defaultValue={getCustomPrice(product.id, index)?.price_with_vat || ""}
-                                onChange={(e) => saveCustomPrice(product, e.target.value, index)}
-                                className="w-32"
-                              />
-                            </TableCell>
-                            <TableCell>
-                              {getCustomPrice(product.id, index) && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => deleteCustomPrice(product.id, index)}
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              )}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </React.Fragment>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </ScrollArea>
+          <div className="flex flex-col md:flex-row gap-4 mb-4">
+            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <SelectTrigger className="w-full md:w-[180px]">
+                <SelectValue placeholder="בחר קטגוריה" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">כל הקטגוריות</SelectItem>
+                {categories.map(cat => (
+                  <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Input
+              placeholder="חיפוש מוצר..."
+              value={customSearchQuery}
+              onChange={(e) => setCustomSearchQuery(e.target.value)}
+              className="flex-1"
+            />
           </div>
+          <ScrollArea className="h-[50vh]">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>מוצר</TableHead>
+                  <TableHead>מחיר רגיל (כולל מע"מ)</TableHead>
+                  <TableHead>מחיר מותאם (כולל מע"מ)</TableHead>
+                  <TableHead>פעולות</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredProducts.flatMap(product => 
+                   product.variations && product.variations.length > 0
+                   ? product.variations.map((variation, index) => ({ ...product, variation, index }))
+                   : [{ ...product, variation: null, index: -1 }]
+                 ).map(item => {
+                   const customPriceInfo = getCustomPrice(item.id, item.index);
+                   const displayName = item.variation ? `${item.name} - ${item.variation.name}` : item.name;
+                   const basePrice = item.variation ? item.variation.price_with_vat : item.price_with_vat;
+                   return (
+                     <TableRow key={`${item.id}-${item.index}`}>
+                       <TableCell>{displayName}</TableCell>
+                       <TableCell>{basePrice?.toFixed(2)} ₪</TableCell>
+                       <TableCell>
+                         <Input 
+                           type="number" 
+                           step="0.01"
+                           defaultValue={customPriceInfo?.price_with_vat?.toFixed(2)}
+                           placeholder="הזן מחיר"
+                           className="w-32"
+                           onBlur={(e) => saveCustomPrice(item, e.target.value, item.index)}
+                         />
+                       </TableCell>
+                       <TableCell>
+                         {customPriceInfo && (
+                           <Button variant="destructive" size="sm" onClick={() => deleteCustomPrice(item.id, item.index)}>
+                             מחק התאמה
+                           </Button>
+                         )}
+                       </TableCell>
+                     </TableRow>
+                   );
+                 })
+                }
+              </TableBody>
+            </Table>
+          </ScrollArea>
+          <DialogFooter>
+            <Button onClick={() => setIsCustomPricingOpen(false)}>סגור</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

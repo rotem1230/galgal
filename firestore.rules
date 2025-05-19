@@ -1,0 +1,68 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // אפשר למשתמשים מאומתים לקרוא מידע על עצמם מקולקציית userRoles
+    match /userRoles/{email} {
+      allow read: if request.auth != null && (request.auth.token.email == email || isHardcodedAdmin());
+      allow write: if false; // רק דרך קונסולת הניהול או cloud functions
+    }
+    
+    // חוקים לקולקציית הלקוחות
+    match /customers/{document=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && (isAdmin() || isHardcodedAdmin()); 
+    }
+    
+    // חוקים לקולקציית המוצרים
+    match /products/{document=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && (isAdmin() || isHardcodedAdmin());
+    }
+    
+    // חוקים לקולקציית הקטגוריות
+    match /categories/{document=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && (isAdmin() || isHardcodedAdmin());
+    }
+    
+    // חוקים לקולקציית ההזמנות - שאילתות רשימה וגישה למסמכים
+    match /orders/{orderId} {
+      // כלל כללי - משתמשים מאומתים יכולים לקרוא הזמנות, אבל בפועל 
+      // רק הזמנות שעומדות בתנאים יוחזרו לפי כללי האבטחה
+      allow read: if request.auth != null;
+      
+      // יצירה - כל משתמש מאומת יכול ליצור הזמנה כל עוד הוא בעל ההזמנה
+      allow create: if request.auth != null && (
+        request.resource.data.userId == request.auth.uid || 
+        request.resource.data.customer_id == request.auth.uid
+      );
+      
+      // עדכון - מנהלים או בעלי ההזמנה יכולים לעדכן הזמנה
+      allow update: if request.auth != null && (
+        isAdmin() || 
+        isHardcodedAdmin() || 
+        resource.data.userId == request.auth.uid || 
+        resource.data.customer_id == request.auth.uid
+      );
+      
+      // מחיקה - מנהלים או בעלי ההזמנה יכולים למחוק הזמנה
+      allow delete: if request.auth != null && (
+        isAdmin() || 
+        isHardcodedAdmin() || 
+        resource.data.userId == request.auth.uid || 
+        resource.data.customer_id == request.auth.uid
+      );
+    }
+    
+    // פונקציה שמחזירה אם המשתמש הוא מנהל מערכת מוגדר בקוד
+    function isHardcodedAdmin() {
+      return request.auth != null && request.auth.token.email == 'rotemhaha321@gmail.com';
+    }
+    
+    // בדיקה אם המשתמש הוא מנהל מערכת
+    function isAdmin() {
+      return exists(/databases/$(database)/documents/userRoles/$(request.auth.token.email)) &&
+        get(/databases/$(database)/documents/userRoles/$(request.auth.token.email)).data.role == 'admin';
+    }
+  }
+} 

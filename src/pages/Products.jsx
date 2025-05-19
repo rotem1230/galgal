@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Product } from "@/api/entities";
 import { Category } from "@/api/entities";
@@ -29,9 +28,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Package, Plus, Pencil, Trash2, X } from "lucide-react";
+import { Package, Plus, Pencil, Trash2, X, Upload } from "lucide-react";
 import { UploadFile } from "@/api/integrations";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Link } from "react-router-dom";
 
 const VAT_RATE = 0.18;
 
@@ -395,317 +395,331 @@ export default function ProductsPage() {
     .filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">מוצרים</h1>
-        <div className="flex gap-2">
-          {selectedProducts.size > 0 && (
-            <Button 
-              variant="outline"
-              onClick={() => setIsBulkEditing(true)}
-              disabled={isBulkEditing}
-            >
-              <Pencil className="w-4 h-4 ml-2" />
-              ערוך {selectedProducts.size} מוצרים
+    <div className="container mx-auto py-6 space-y-6">
+      <div className="p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold">מוצרים</h1>
+          <div className="flex gap-2">
+            {selectedProducts.size > 0 && (
+              <Button 
+                variant="outline"
+                onClick={() => setIsBulkEditing(true)}
+                disabled={isBulkEditing}
+              >
+                <Pencil className="w-4 h-4 ml-2" />
+                ערוך {selectedProducts.size} מוצרים
+              </Button>
+            )}
+            <Link to="/BulkProductImport">
+              <Button variant="outline" className="flex items-center">
+                <Upload className="w-4 h-4 ml-2" />
+                <span>העלאת מוצרים מתמונות</span>
+              </Button>
+            </Link>
+            <Button onClick={() => setIsAddOpen(true)}>
+              <Plus className="w-4 h-4 ml-2" />
+              מוצר חדש
             </Button>
-          )}
-          <Button onClick={() => setIsAddOpen(true)}>
-            <Plus className="w-4 h-4 ml-2" />
-            מוצר חדש
-          </Button>
-        </div>
-      </div>
-
-      {deleteError && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-          {deleteError}
-          {deleteError.includes("מגבלת קצב") && (
-            <Button 
-              variant="link" 
-              onClick={() => window.location.reload()}
-              className="mr-2"
-            >
-              טען מחדש
-            </Button>
-          )}
-        </div>
-      )}
-      
-      {isLoading ? (
-        <div className="flex justify-center items-center min-h-[400px]">
-          <div className="flex flex-col items-center space-y-2">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-            <p>טוען נתונים...</p>
           </div>
         </div>
-      ) : (
-        <>
-          <div className="flex gap-4 mb-6">
-            <div className="flex-1">
-              <Input
-                placeholder="חפש מוצר..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full"
-              />
-            </div>
-            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="בחר קטגוריה" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">כל הקטגוריות</SelectItem>
-                {categories.map((category) => (
-                  <SelectItem key={category.id} value={category.id}>
-                    {category.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {filteredProducts.length > 0 && (
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={selectAll}>
-                  בחר הכל
-                </Button>
-                {selectedProducts.size > 0 && (
-                  <Button variant="outline" size="sm" onClick={deselectAll}>
-                    נקה בחירה
-                  </Button>
-                )}
-              </div>
+
+        {deleteError && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            {deleteError}
+            {deleteError.includes("מגבלת קצב") && (
+              <Button 
+                variant="link" 
+                onClick={() => window.location.reload()}
+                className="mr-2"
+              >
+                טען מחדש
+              </Button>
             )}
           </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-            {filteredProducts.map((product) => (
-              <Card key={product.id} className="overflow-hidden relative">
-                <div className="absolute top-2 right-2 z-10">
-                  <Checkbox
-                    checked={selectedProducts.has(product.id)}
-                    onCheckedChange={() => toggleProductSelection(product.id)}
-                  />
-                </div>
-                <div className="aspect-square relative">
-                  {product.image_url ? (
-                    <img 
-                      src={product.image_url} 
-                      alt={product.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-gray-50 flex items-center justify-center">
-                      <Package className="w-12 h-12 text-gray-300" />
-                    </div>
+        )}
+        
+        {isLoading ? (
+          <div className="flex justify-center items-center min-h-[400px]">
+            <div className="flex flex-col items-center space-y-2">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+              <p>טוען נתונים...</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="flex gap-4 mb-6">
+              <div className="flex-1">
+                <Input
+                  placeholder="חפש מוצר..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full"
+                />
+              </div>
+              <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                <SelectTrigger className="w-48">
+                  <SelectValue placeholder="בחר קטגוריה" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">כל הקטגוריות</SelectItem>
+                  {categories.map((category) => (
+                    <SelectItem key={category.id} value={category.id}>
+                      {category.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {filteredProducts.length > 0 && (
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={selectAll}>
+                    בחר הכל
+                  </Button>
+                  {selectedProducts.size > 0 && (
+                    <Button variant="outline" size="sm" onClick={deselectAll}>
+                      נקה בחירה
+                    </Button>
                   )}
                 </div>
-                <div className="p-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-bold">{product.name}</h3>
-                      <p className="text-sm text-gray-600">
-                        {categories.find(c => c.id === product.category_id)?.name}
-                      </p>
-                      <p className="mt-2 font-medium">
-                        ₪{product.price_with_vat} כולל מע"מ
-                      </p>
-                      {product.variations?.length > 0 && (
-                        <p className="text-sm text-gray-500 mt-1">
-                          {product.variations.length} וריאציות
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+              {filteredProducts.map((product) => (
+                <Card key={product.id} className="overflow-hidden relative">
+                  <div className="absolute top-2 right-2 z-10">
+                    <Checkbox
+                      checked={selectedProducts.has(product.id)}
+                      onCheckedChange={() => toggleProductSelection(product.id)}
+                    />
+                  </div>
+                  <div className="aspect-square relative">
+                    {product.image_url ? (
+                      <img 
+                        src={product.image_url} 
+                        alt={product.name}
+                        className="w-full h-full object-contain"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gray-50 flex items-center justify-center">
+                        <Package className="w-12 h-12 text-gray-300" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-4">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h3 className="font-bold">{product.name}</h3>
+                        <p className="text-sm text-gray-600">
+                          {categories.find(c => c.id === product.category_id)?.name}
                         </p>
-                      )}
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleEdit(product)}
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDelete(product.id)}
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
+                        <p className="mt-2 font-medium">
+                          ₪{product.price_with_vat} כולל מע"מ
+                        </p>
+                        {product.variations?.length > 0 && (
+                          <p className="text-sm text-gray-500 mt-1">
+                            {product.variations.length} וריאציות
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleEdit(product)}
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDelete(product.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-        </>
-      )}
-      
-      <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>
-              {editingProduct ? "עריכת מוצר" : "הוספת מוצר חדש"}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">שם המוצר</label>
-              <Input
-                value={newProduct.name}
-                onChange={(e) =>
-                  setNewProduct({ ...newProduct, name: e.target.value })
-                }
-                placeholder="הכנס שם מוצר"
-              />
+                </Card>
+              ))}
             </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">קטגוריה</label>
-              <Select
-                value={newProduct.category_id}
-                onValueChange={(value) =>
-                  setNewProduct({ ...newProduct, category_id: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="בחר קטגוריה" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((category) => (
-                    <SelectItem key={category.id} value={category.id}>
-                      {category.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">מחיר כולל מע"מ</label>
-              <Input
-                type="number"
-                value={newProduct.price_with_vat}
-                onChange={(e) => handlePriceChange(e.target.value)}
-                placeholder="הכנס מחיר"
-              />
-              <p className="text-sm text-gray-500 mt-1">
-                מחיר לפני מע"מ: ₪{newProduct.price_before_vat}
+          </>
+        )}
+        
+        <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
+          <DialogContent className="max-w-xl" aria-describedby="product-dialog-description">
+            <DialogHeader>
+              <DialogTitle>
+                {editingProduct ? "עריכת מוצר" : "הוספת מוצר חדש"}
+              </DialogTitle>
+              <p id="product-dialog-description" className="text-sm text-gray-500">
+                הזן את פרטי המוצר בטופס זה
               </p>
-            </div>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">שם המוצר</label>
+                <Input
+                  value={newProduct.name}
+                  onChange={(e) =>
+                    setNewProduct({ ...newProduct, name: e.target.value })
+                  }
+                  placeholder="הכנס שם מוצר"
+                />
+              </div>
 
-            <div>
-              <label className="block text-sm font-medium mb-1">תמונה</label>
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleFileUpload}
-                className="w-full"
-              />
-            </div>
-
-            <div>
-              <div className="flex justify-between items-center mb-2">
-                <label className="block text-sm font-medium">וריאציות</label>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAddVariation}
+              <div>
+                <label className="block text-sm font-medium mb-1">קטגוריה</label>
+                <Select
+                  value={newProduct.category_id}
+                  onValueChange={(value) =>
+                    setNewProduct({ ...newProduct, category_id: value })
+                  }
                 >
-                  <Plus className="w-4 h-4 ml-2" />
-                  הוסף וריאציה
-                </Button>
+                  <SelectTrigger>
+                    <SelectValue placeholder="בחר קטגוריה" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
-              <div className="space-y-3">
-                {newProduct.variations.map((variation, index) => (
-                  <div key={index} className="flex gap-3 items-start">
-                    <Input
-                      value={variation.name}
-                      onChange={(e) =>
-                        handleVariationChange(index, "name", e.target.value)
-                      }
-                      placeholder="שם הוריאציה"
-                    />
-                    <Input
-                      type="number"
-                      value={variation.price_with_vat}
-                      onChange={(e) =>
-                        handleVariationChange(index, "price_with_vat", e.target.value)
-                      }
-                      placeholder="מחיר כולל מע״מ"
-                      className="w-32"
-                    />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeVariation(index)}
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              onClick={handleSubmit}
-              disabled={!newProduct.name || !newProduct.category_id || isUploading}
-            >
-              {editingProduct ? "שמור שינויים" : "צור מוצר"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
-      <Dialog open={isBulkEditing} onOpenChange={setIsBulkEditing}>
-        <DialogContent className="max-w-xl">
-          <DialogHeader>
-            <DialogTitle>עריכת {selectedProducts.size} מוצרים</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">קטגוריה</label>
-              <Select
-                value={bulkEditData.category_id}
-                onValueChange={(value) =>
-                  setBulkEditData({ ...bulkEditData, category_id: value })
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="בחר קטגוריה" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((category) => (
-                    <SelectItem key={category.id} value={category.id}>
-                      {category.name}
-                    </SelectItem>
+              <div>
+                <label className="block text-sm font-medium mb-1">מחיר כולל מע"מ</label>
+                <Input
+                  type="number"
+                  value={newProduct.price_with_vat}
+                  onChange={(e) => handlePriceChange(e.target.value)}
+                  placeholder="הכנס מחיר"
+                />
+                <p className="text-sm text-gray-500 mt-1">
+                  מחיר לפני מע"מ: ₪{newProduct.price_before_vat}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">תמונה</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileUpload}
+                  className="w-full"
+                />
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-sm font-medium">וריאציות</label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleAddVariation}
+                  >
+                    <Plus className="w-4 h-4 ml-2" />
+                    הוסף וריאציה
+                  </Button>
+                </div>
+                <div className="space-y-3">
+                  {newProduct.variations.map((variation, index) => (
+                    <div key={index} className="flex gap-3 items-start">
+                      <Input
+                        value={variation.name}
+                        onChange={(e) =>
+                          handleVariationChange(index, "name", e.target.value)
+                        }
+                        placeholder="שם הוריאציה"
+                      />
+                      <Input
+                        type="number"
+                        value={variation.price_with_vat}
+                        onChange={(e) =>
+                          handleVariationChange(index, "price_with_vat", e.target.value)
+                        }
+                        placeholder="מחיר כולל מע״מ"
+                        className="w-32"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => removeVariation(index)}
+                      >
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
                   ))}
-                </SelectContent>
-              </Select>
-              <p className="text-sm text-gray-500 mt-1">השאר ריק אם אינך רוצה לשנות את הקטגוריה</p>
+                </div>
+              </div>
             </div>
+            <DialogFooter>
+              <Button
+                onClick={handleSubmit}
+                disabled={!newProduct.name || !newProduct.category_id || isUploading}
+              >
+                {editingProduct ? "שמור שינויים" : "צור מוצר"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-            <div>
-              <label className="block text-sm font-medium mb-1">מחיר כולל מע"מ</label>
-              <Input
-                type="number"
-                value={bulkEditData.price_with_vat}
-                onChange={(e) =>
-                  setBulkEditData({ ...bulkEditData, price_with_vat: e.target.value })
-                }
-                placeholder="הכנס מחיר"
-              />
-              <p className="text-sm text-gray-500 mt-1">השאר ריק אם אינך רוצה לשנות את המחיר</p>
+        <Dialog open={isBulkEditing} onOpenChange={setIsBulkEditing}>
+          <DialogContent className="max-w-xl" aria-describedby="bulk-edit-dialog-description">
+            <DialogHeader>
+              <DialogTitle>עריכת {selectedProducts.size} מוצרים</DialogTitle>
+              <p id="bulk-edit-dialog-description" className="text-sm text-gray-500">
+                עריכה גורפת של מספר מוצרים במקביל
+              </p>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">קטגוריה</label>
+                <Select
+                  value={bulkEditData.category_id}
+                  onValueChange={(value) =>
+                    setBulkEditData({ ...bulkEditData, category_id: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="בחר קטגוריה" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-sm text-gray-500 mt-1">השאר ריק אם אינך רוצה לשנות את הקטגוריה</p>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">מחיר כולל מע"מ</label>
+                <Input
+                  type="number"
+                  value={bulkEditData.price_with_vat}
+                  onChange={(e) =>
+                    setBulkEditData({ ...bulkEditData, price_with_vat: e.target.value })
+                  }
+                  placeholder="הכנס מחיר"
+                />
+                <p className="text-sm text-gray-500 mt-1">השאר ריק אם אינך רוצה לשנות את המחיר</p>
+              </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button
-              onClick={handleBulkEdit}
-              disabled={!bulkEditData.category_id && !bulkEditData.price_with_vat}
-            >
-              עדכן מוצרים
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <DialogFooter>
+              <Button
+                onClick={handleBulkEdit}
+                disabled={!bulkEditData.category_id && !bulkEditData.price_with_vat}
+              >
+                עדכן מוצרים
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
     </div>
   );
 }

@@ -1,14 +1,15 @@
-import './App.css'
-import Pages from "@/pages/index.jsx"
-import { Toaster } from "@/components/ui/toaster"
+import React from 'react';
+import './App.css';
+import Pages from "@/pages/index.jsx";
+import { Toaster } from "@/components/ui/toaster";
 
 function App() {
   return (
     <>
-      <Pages />
+      <Pages /> 
       <Toaster />
     </>
-  )
+  );
 }
 
-export default App 
+export default App; 
