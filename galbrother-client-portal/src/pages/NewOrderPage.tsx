@@ -4,6 +4,7 @@ import { useClientAuth } from '../context/ClientAuthContext.tsx';
 import { db } from '../../firebase-config';
 import { collection, addDoc, Timestamp } from 'firebase/firestore';
 import { useNavigate } from 'react-router-dom';
+import { Check } from 'lucide-react';
 
 const NewOrderPage: React.FC = () => {
   const { cartItems, getTotalPrice, clearCart } = useCart();
@@ -105,7 +106,7 @@ const NewOrderPage: React.FC = () => {
       
       // נמתין 3 שניות לפני שנעביר את המשתמש לדף ההיסטוריה
       setTimeout(() => {
-        navigate('/history');
+        navigate('/client/history');
       }, 3000);
       
     } catch (err) {
@@ -163,9 +164,19 @@ const NewOrderPage: React.FC = () => {
             <button 
               onClick={handlePlaceOrder}
               disabled={isLoading}
-              className="bg-green-600 text-white py-2 px-8 rounded hover:bg-green-700 transition duration-150 ease-in-out shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center justify-center bg-blue-600 text-white py-4 px-8 rounded-lg text-xl font-bold shadow-lg hover:bg-blue-700 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoading ? 'שולח הזמנה...' : 'שלח הזמנה'}
+              {isLoading ? (
+                <>
+                  <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full ml-2"></div>
+                  <span>שולח הזמנה...</span>
+                </>
+              ) : (
+                <>
+                  <Check className="w-5 h-5 ml-2" />
+                  <span>שלח הזמנה</span>
+                </>
+              )}
             </button>
           </div>
         </div>

@@ -34,11 +34,30 @@ export const ClientAuthProvider: React.FC<ClientAuthProviderProps> = ({ children
     return unsubscribe;
   }, []);
 
+  // בדיקה אם המשתמש בפורטל הלקוחות ולא בפורטל הניהול
+  useEffect(() => {
+    const checkPathAndRedirect = () => {
+      const isClientPath = window.location.pathname.startsWith('/client') || 
+                           window.location.pathname === '/login-client';
+      
+      // אם המשתמש לא מחובר והוא בנתיב של הלקוחות, נפנה אותו לדף ההתחברות של הלקוחות
+      if (currentUser === null && !loading && isClientPath && 
+          window.location.pathname !== '/login-client') {
+        window.location.href = '/login-client';
+      }
+    };
+
+    checkPathAndRedirect();
+  }, [currentUser, loading]);
+
   const logout = async () => {
     try {
       await signOut(auth);
       console.log("Logged out successfully");
       // המצב ישתנה אוטומטית בזכות onAuthStateChanged
+      
+      // ניתוב ידני לדף ההתחברות של הלקוחות
+      window.location.href = '/login-client';
     } catch (error) {
       console.error("Logout failed:", error);
     }
@@ -48,7 +67,10 @@ export const ClientAuthProvider: React.FC<ClientAuthProviderProps> = ({ children
 
   // בזמן הטעינה, אפשר להציג מסך טעינה או כלום
   if (loading) {
-    return <div>טוען אימות...</div>; // או null, או ספינר
+    return <div className="flex justify-center items-center p-8 min-h-screen">
+      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600"></div>
+      <span className="mr-3">טוען אימות...</span>
+    </div>;
   }
 
   return (

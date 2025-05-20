@@ -1,7 +1,7 @@
 import React from 'react';
 import { useCart } from '../context/CartContext.tsx';
 import { Link } from 'react-router-dom';
-import { Trash2, Plus, Minus } from 'lucide-react';
+import { Trash2, Plus, Minus, ArrowLeft } from 'lucide-react';
 
 const CartPage: React.FC = () => {
   const { 
@@ -34,7 +34,7 @@ const CartPage: React.FC = () => {
         <div className="text-center py-10">
           <p className="text-xl text-gray-600 mb-4">עגלת הקניות שלך ריקה.</p>
           <Link 
-            to="/"
+            to="/client"
             className="bg-blue-600 text-white py-2 px-6 rounded hover:bg-blue-700 transition duration-150 ease-in-out"
           >
             המשך לקנות
@@ -111,10 +111,11 @@ const CartPage: React.FC = () => {
             </div>
              <div className="text-left mt-4">
                <Link 
-                 to="/new-order" 
-                 className="bg-green-600 text-white py-2 px-6 rounded hover:bg-green-700 transition duration-150 ease-in-out shadow-sm"
+                 to="/client/new-order" 
+                 className="inline-flex items-center justify-center bg-blue-600 text-white py-4 px-8 rounded-lg text-xl font-bold shadow-lg hover:bg-blue-700 transition-colors duration-200"
                >
-                 המשך להזמנה
+                 <span className="ml-2">המשך להזמנה</span>
+                 <ArrowLeft className="w-5 h-5" />
                </Link>
              </div>
           </div>
