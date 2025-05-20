@@ -1,11 +1,10 @@
-// API proxy for iCount requests
+// API proxy for iCount - with express approach
 // Solves CORS issues by relaying requests through the backend
 
-const https = require('https');
-const url = require('url');
+const axios = require('axios');
 
 module.exports = async (req, res) => {
-  // מגדיר CORS למניעת שגיאות
+  // הגדרת CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -15,147 +14,78 @@ module.exports = async (req, res) => {
     return res.status(200).end();
   }
   
-  // הדפסת מידע מלא לדיבוג
-  console.log('==== התקבלה בקשה לפרוקסי iCount ====');
-  console.log('Method:', req.method);
-  console.log('URL:', req.url);
-  console.log('Query:', req.query);
-  console.log('Headers:', req.headers);
+  console.log('iCount Proxy Request:', {
+    method: req.method,
+    query: req.query,
+    url: req.url
+  });
   
   try {
-    // בדיקת פרמטרים הכרחיים
+    // בדיקת פרמטרים חובה
     const { cid, username, path } = req.query;
     
     if (!cid || !username || !path) {
-      console.error('חסרים פרמטרים חובה:', { cid, username, path });
       return res.status(400).json({
-        error: true,
-        message: 'Missing required parameters (cid, username, path)'
+        error: {
+          message: 'Missing required parameters (cid, username, path)'
+        }
       });
     }
     
-    // חילוץ authorization token אם קיים
-    let authToken = null;
-    if (req.headers.authorization) {
-      // לוקח רק את החלק אחרי Bearer אם יש
-      authToken = req.headers.authorization.startsWith('Bearer ') 
-        ? req.headers.authorization.substring(7) 
-        : req.headers.authorization;
-    }
-    
-    // בניית URL לבקשה ל-iCount
+    // הכנת URL ל-iCount API
     const icountBaseUrl = 'https://api.icount.co.il/api/v3.0';
     const endpoint = `${icountBaseUrl}/${path}`;
     
-    // הכנת פרמטרים לבקשה
-    const queryParams = new URLSearchParams();
+    // הכנת פרמטרים לשאילתה
+    const params = { ...req.query };
+    delete params.path; // לא צריך לשלוח את ה-path כפרמטר
     
-    // הוספת פרמטרים בסיסיים
-    queryParams.append('cid', cid);
-    queryParams.append('username', username);
-    
-    // הוספת שאר הפרמטרים (למעט path)
-    for (const key in req.query) {
-      if (key !== 'path' && key !== 'cid' && key !== 'username') {
-        queryParams.append(key, req.query[key]);
+    // הכנת אפשרויות הבקשה
+    const options = {
+      method: req.method,
+      url: endpoint,
+      params: params,
+      headers: {
+        'Content-Type': 'application/json'
       }
+    };
+    
+    // הוספת Authorization אם יש
+    if (req.headers.authorization) {
+      options.headers.Authorization = req.headers.authorization;
     }
     
-    // בניית URL סופי עם פרמטרים
-    const requestUrl = `${endpoint}?${queryParams.toString()}`;
-    console.log('URL מלא לבקשה:', requestUrl);
+    // אם זה POST, מוסיפים את הבאדי
+    if (req.method === 'POST' && req.body) {
+      options.data = req.body;
+    }
     
-    // שליחת בקשה ל-iCount בצורה ידנית באמצעות https
-    const icountPromise = new Promise((resolve, reject) => {
-      // פרסור ה-URL
-      const parsedUrl = url.parse(requestUrl);
-      
-      // הכנת אפשרויות בקשה
-      const options = {
-        hostname: parsedUrl.hostname,
-        path: parsedUrl.path,
-        method: req.method,
-        headers: {
-          'Content-Type': 'application/json',
-        }
-      };
-      
-      // הוספת ה-Authorization אם יש
-      if (authToken) {
-        options.headers['Authorization'] = `Bearer ${authToken}`;
-      }
-      
-      console.log('אפשרויות בקשה:', options);
-      
-      // יצירת הבקשה
-      const icountReq = https.request(options, (icountRes) => {
-        console.log('קוד תשובה מ-iCount:', icountRes.statusCode);
-        console.log('כותרות תשובה:', icountRes.headers);
-        
-        let responseData = '';
-        
-        // טיפול במידע מהתשובה
-        icountRes.on('data', (chunk) => {
-          responseData += chunk;
-        });
-        
-        // סיום התשובה
-        icountRes.on('end', () => {
-          try {
-            // ניסיון לפרסר JSON
-            const jsonResponse = responseData.trim() ? JSON.parse(responseData) : {};
-            console.log('תשובה מ-iCount (JSON):', jsonResponse);
-            
-            // החזרת התשובה למקורי
-            resolve({
-              statusCode: icountRes.statusCode,
-              headers: icountRes.headers,
-              data: jsonResponse
-            });
-          } catch (error) {
-            console.error('שגיאה בפרסור תשובה:', error);
-            console.log('תשובה גולמית:', responseData);
-            
-            // החזרת התשובה הגולמית
-            resolve({
-              statusCode: icountRes.statusCode,
-              headers: icountRes.headers,
-              data: { raw: responseData }
-            });
-          }
-        });
-      });
-      
-      // טיפול בשגיאות של הבקשה עצמה
-      icountReq.on('error', (error) => {
-        console.error('שגיאה בבקשה ל-iCount:', error);
-        reject(error);
-      });
-      
-      // טיפול ב-body ב-POST
-      if (req.method === 'POST' && req.body) {
-        const bodyData = JSON.stringify(req.body);
-        console.log('שולח גוף POST:', bodyData);
-        icountReq.write(bodyData);
-      }
-      
-      // סיום הבקשה
-      icountReq.end();
+    console.log('Sending request to iCount:', {
+      url: options.url,
+      method: options.method,
+      params: options.params
     });
     
-    // המתנה לתוצאות
-    const response = await icountPromise;
+    // שליחת הבקשה באמצעות axios
+    const response = await axios(options);
     
-    // החזרת התשובה ללקוח
-    return res.status(response.statusCode).json(response.data);
+    // החזרת התשובה
+    return res.status(response.status).json(response.data);
     
   } catch (error) {
-    console.error('שגיאה קריטית בפרוקסי:', error);
+    console.error('iCount Proxy Error:', error.message);
     
-    return res.status(500).json({
-      error: true,
-      message: error.message || 'Internal Server Error',
-      stack: error.stack
-    });
+    // משיכת מידע שגיאה אם קיים
+    const status = error.response?.status || 500;
+    const errorData = {
+      error: {
+        message: error.message,
+        details: error.response?.data || error.stack
+      }
+    };
+    
+    console.error('Error details:', errorData);
+    
+    return res.status(status).json(errorData);
   }
 }; 
