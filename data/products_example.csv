@@ -1,0 +1,4 @@
+name,category_id,category_name,image_url,price_before_vat,price_with_vat,variations
+נייר גלגול אדום,,ניירות גלגול,https://example.com/image1.jpg,3.39,3.97,"אדום,כחול,ירוק"
+מצית BIC,,מצתים,https://example.com/image2.jpg,5.93,6.94,
+נרגילה קלאסית קטנה,,נרגילות,https://example.com/image3.jpg,42.37,49.57,"שחור,כסף,זהב" 
