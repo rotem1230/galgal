@@ -1,11 +1,10 @@
-
 import React, { useState, useEffect } from "react";
 import { Category } from "@/api/entities";
 import { Product } from "@/api/entities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
-import { Plus, Pencil, Trash2, Package, ImageIcon, ArrowDownUp } from "lucide-react";
+import { Plus, Pencil, Trash2, Package, ImageIcon, ArrowDownUp, Upload, FileText } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -17,6 +16,7 @@ import { UploadFile } from "@/api/integrations";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { parse } from 'papaparse';
 
 export default function CategoriesPage() {
   const [categories, setCategories] = useState([]);
@@ -35,6 +35,9 @@ export default function CategoriesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedCategories, setSelectedCategories] = useState(new Set());
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [importStatus, setImportStatus] = useState({ total: 0, added: 0, skipped: 0, inProgress: false });
+  const [csvFile, setCsvFile] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -221,6 +224,113 @@ export default function CategoriesPage() {
     }
   };
 
+  const handleCsvFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setCsvFile(file);
+    }
+  };
+
+  const importCategoriesFromCsv = async () => {
+    if (!csvFile) {
+      setGenerationError('בחר קובץ CSV תחילה');
+      return;
+    }
+
+    setImportStatus(prev => ({ ...prev, inProgress: true }));
+    setGenerationError('');
+
+    try {
+      // קרא את תוכן הקובץ
+      const fileReader = new FileReader();
+      fileReader.onload = async (event) => {
+        const csvText = event.target.result;
+        
+        // פרסר את תוכן ה-CSV
+        const { data, errors } = parse(csvText, {
+          header: true,
+          skipEmptyLines: true
+        });
+
+        if (errors.length > 0) {
+          setGenerationError(`שגיאה בפענוח הקובץ: ${errors[0].message}`);
+          setImportStatus(prev => ({ ...prev, inProgress: false }));
+          return;
+        }
+
+        // קבל את הקטגוריות הקיימות
+        const existingCategoriesSnapshot = await Category.list();
+        const existingCategoriesMap = new Map();
+        
+        existingCategoriesSnapshot.forEach(cat => {
+          existingCategoriesMap.set(cat.name, cat);
+        });
+        
+        let addedCount = 0;
+        let skippedCount = 0;
+        
+        // עבור על כל הקטגוריות בקובץ
+        for (const categoryData of data) {
+          // וודא שיש שם לקטגוריה
+          if (!categoryData.name) {
+            skippedCount++;
+            continue;
+          }
+          
+          // קטגוריה קיימת כבר?
+          const existingCategory = existingCategoriesMap.get(categoryData.name);
+          
+          // המר שדה is_active לבוליאני
+          let isActive = true; // ברירת מחדל פעיל
+          if (categoryData.is_active !== undefined) {
+            isActive = categoryData.is_active === "true" || categoryData.is_active === true;
+          }
+          
+          // הכן את אובייקט הקטגוריה
+          const categoryToSave = {
+            name: categoryData.name,
+            image_url: categoryData.image_url || '',
+            is_active: isActive
+          };
+          
+          if (existingCategory) {
+            skippedCount++;
+          } else {
+            // הוסף קטגוריה חדשה
+            await Category.create(categoryToSave);
+            addedCount++;
+          }
+        }
+        
+        // עדכן את מצב הייבוא
+        setImportStatus({
+          total: data.length,
+          added: addedCount,
+          skipped: skippedCount,
+          inProgress: false
+        });
+        
+        // רענן את הנתונים
+        await loadData();
+        
+        // סגור את החלון לאחר 3 שניות אם הייבוא הצליח
+        setTimeout(() => {
+          if (addedCount > 0) {
+            setIsImportOpen(false);
+          }
+        }, 3000);
+        
+      };
+      
+      fileReader.readAsText(csvFile);
+      
+    } catch (error) {
+      console.error("שגיאה בייבוא קטגוריות:", error);
+      setGenerationError(`שגיאה בייבוא קטגוריות: ${error.message}`);
+      setImportStatus(prev => ({ ...prev, inProgress: false }));
+    }
+  };
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
@@ -245,6 +355,10 @@ export default function CategoriesPage() {
               )}
             </Button>
           )}
+          <Button onClick={() => setIsImportOpen(true)} variant="outline">
+            <Upload className="w-4 h-4 ml-2" />
+            ייבוא קטגוריות
+          </Button>
           <Button onClick={() => setIsAddOpen(true)}>
             <Plus className="w-4 h-4 ml-2" />
             קטגוריה חדשה
@@ -485,6 +599,56 @@ export default function CategoriesPage() {
                   disabled={!newCategory.name || isUploading}
                 >
                   {editingCategory ? "שמור שינויים" : "צור קטגוריה"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={isImportOpen} onOpenChange={setIsImportOpen}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>ייבוא קטגוריות מקובץ CSV</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">קובץ CSV</label>
+                  <Input 
+                    type="file" 
+                    accept=".csv" 
+                    onChange={handleCsvFileChange}
+                    disabled={importStatus.inProgress}
+                  />
+                  <p className="text-sm text-gray-500 mt-2">
+                    הקובץ צריך להכיל את העמודות: name, image_url, is_active
+                  </p>
+                </div>
+                
+                {generationError && (
+                  <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                    {generationError}
+                  </div>
+                )}
+                
+                {!importStatus.inProgress && importStatus.total > 0 && (
+                  <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
+                    <p>הייבוא הושלם בהצלחה!</p>
+                    <p>סה"כ: {importStatus.total}</p>
+                    <p>נוספו: {importStatus.added}</p>
+                    <p>דולגו: {importStatus.skipped}</p>
+                  </div>
+                )}
+              </div>
+              <DialogFooter>
+                <Button
+                  onClick={importCategoriesFromCsv}
+                  disabled={!csvFile || importStatus.inProgress}
+                >
+                  {importStatus.inProgress ? (
+                    <div className="flex items-center">
+                      <div className="animate-spin h-4 w-4 border-2 border-b-transparent rounded-full ml-2"></div>
+                      מייבא...
+                    </div>
+                  ) : "התחל ייבוא"}
                 </Button>
               </DialogFooter>
             </DialogContent>

@@ -28,10 +28,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Package, Plus, Pencil, Trash2, X, Upload } from "lucide-react";
+import { Package, Plus, Pencil, Trash2, X, Upload, AlertTriangle } from "lucide-react";
 import { UploadFile } from "@/api/integrations";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Link } from "react-router-dom";
+import { parse } from 'papaparse';
 
 const VAT_RATE = 0.18;
 
@@ -60,6 +61,11 @@ export default function ProductsPage() {
     price_with_vat: "",
     price_before_vat: ""
   });
+  const [isImportOpen, setIsImportOpen] = useState(false);
+  const [importStatus, setImportStatus] = useState({ total: 0, added: 0, skipped: 0, categoryMismatch: 0, inProgress: false });
+  const [csvFile, setCsvFile] = useState(null);
+  const [isDeleteAllOpen, setIsDeleteAllOpen] = useState(false);
+  const [isDeletingAll, setIsDeletingAll] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -390,6 +396,241 @@ export default function ProductsPage() {
     }
   };
 
+  const handleCsvFileChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setCsvFile(file);
+    }
+  };
+
+  const processProductVariations = (product) => {
+    const variations = [];
+    
+    // אם אין וריאציות בכלל
+    if (!product.variations) {
+      return variations;
+    }
+    
+    try {
+      // אם יש וריאציות בפורמט טקסט מופרד בפסיקים
+      if (typeof product.variations === 'string') {
+        const variationNames = product.variations.split(',')
+          .map(v => v.trim())
+          .filter(v => v);
+          
+        // עבור כל וריאציה, יצור אובייקט מלא
+        variationNames.forEach(name => {
+          // חפש שדות עם פורמט שם_וריאציה_price_before_vat או שם_וריאציה_price_with_vat
+          // אם לא קיימים, השתמש במחירי המוצר הראשי
+          const variationPriceBeforeVat = 
+            product[`${name}_price_before_vat`] !== undefined
+            ? parseFloat(product[`${name}_price_before_vat`])
+            : parseFloat(product.price_before_vat) || 0;
+            
+          const variationPriceWithVat = 
+            product[`${name}_price_with_vat`] !== undefined
+            ? parseFloat(product[`${name}_price_with_vat`])
+            : parseFloat(product.price_with_vat) || 0;
+            
+          variations.push({
+            name: name,
+            price_before_vat: variationPriceBeforeVat,
+            price_with_vat: variationPriceWithVat
+          });
+        });
+      }
+      // אם הוריאציות הן כבר במבנה מערך (לא סביר מ-CSV אבל למקרה שהן מגיעות כך)
+      else if (Array.isArray(product.variations)) {
+        product.variations.forEach(variation => {
+          // וודא שהוריאציה היא אובייקט ויש לה שם
+          if (typeof variation === 'object' && variation.name) {
+            variations.push({
+              name: variation.name,
+              price_before_vat: parseFloat(variation.price_before_vat) || 0,
+              price_with_vat: parseFloat(variation.price_with_vat) || 0
+            });
+          } else if (typeof variation === 'string') {
+            // אם הוריאציה היא מחרוזת בלבד, הוסף אותה עם המחירים של המוצר הראשי
+            variations.push({
+              name: variation,
+              price_before_vat: parseFloat(product.price_before_vat) || 0,
+              price_with_vat: parseFloat(product.price_with_vat) || 0
+            });
+          }
+        });
+      }
+    } catch (e) {
+      console.error(`שגיאה בעיבוד וריאציות למוצר:`, e.message);
+    }
+    
+    return variations;
+  };
+
+  const deleteAllProducts = async () => {
+    setIsDeletingAll(true);
+    try {
+      // קבל את כל המוצרים
+      const productsData = await Product.list();
+      
+      // מחק כל מוצר ברשימה
+      for (const product of productsData) {
+        await Product.delete(product.id);
+      }
+      
+      // רענן את הדף
+      await loadData();
+      
+      // סגור את דיאלוג האישור
+      setIsDeleteAllOpen(false);
+    } catch (error) {
+      console.error("שגיאה במחיקת כל המוצרים:", error);
+      setDeleteError(`שגיאה במחיקת כל המוצרים: ${error.message}`);
+    } finally {
+      setIsDeletingAll(false);
+    }
+  };
+
+  const importProductsFromCsv = async () => {
+    if (!csvFile) {
+      setDeleteError('בחר קובץ CSV תחילה');
+      return;
+    }
+
+    setImportStatus(prev => ({ ...prev, inProgress: true }));
+    setDeleteError('');
+
+    try {
+      // קרא את תוכן הקובץ
+      const fileReader = new FileReader();
+      fileReader.onload = async (event) => {
+        const csvText = event.target.result;
+        
+        // פרסר את תוכן ה-CSV
+        const { data, errors } = parse(csvText, {
+          header: true,
+          skipEmptyLines: true
+        });
+
+        if (errors.length > 0) {
+          setDeleteError(`שגיאה בפענוח הקובץ: ${errors[0].message}`);
+          setImportStatus(prev => ({ ...prev, inProgress: false }));
+          return;
+        }
+
+        // קבל את המוצרים הקיימים
+        const existingProductsSnapshot = await Product.list();
+        const existingProductsMap = new Map();
+        
+        existingProductsSnapshot.forEach(product => {
+          existingProductsMap.set(product.name, product);
+        });
+        
+        // קבל את הקטגוריות הקיימות לצורך מיפוי שמות לID
+        const categoriesSnapshot = await Category.list();
+        const categoriesMap = new Map();
+        
+        categoriesSnapshot.forEach(category => {
+          categoriesMap.set(category.name, category.id);
+        });
+        
+        let addedCount = 0;
+        let skippedCount = 0;
+        let categoryMismatchCount = 0;
+        
+        // עבור על כל המוצרים בקובץ
+        for (const productData of data) {
+          // וודא שיש שם למוצר
+          if (!productData.name) {
+            skippedCount++;
+            continue;
+          }
+          
+          // מוצר קיים כבר?
+          const existingProduct = existingProductsMap.get(productData.name);
+          
+          // טיפול בקטגוריה - תן עדיפות ל-ID אם קיים, אחרת חפש לפי שם
+          let categoryId = null;
+          
+          // אם יש category_id ישיר
+          if (productData.category_id) {
+            // בדוק אם ה-ID קיים במערכת
+            const categoryExists = Array.from(categoriesMap.values()).includes(productData.category_id);
+            if (categoryExists) {
+              categoryId = productData.category_id;
+            } else {
+              console.log(`אזהרה: קטגוריה עם ID '${productData.category_id}' למוצר '${productData.name}' לא נמצאה`);
+              categoryMismatchCount++;
+            }
+          } 
+          // אם אין ID תקף אבל יש שם קטגוריה, נסה למצוא לפי שם
+          else if (productData.category_name) {
+            categoryId = categoriesMap.get(productData.category_name);
+            if (!categoryId) {
+              console.log(`אזהרה: קטגוריה '${productData.category_name}' למוצר '${productData.name}' לא נמצאה`);
+              categoryMismatchCount++;
+            }
+          }
+          // תמיכה לאחורה בפורמט הישן שהשתמש ב-'category' 
+          else if (productData.category) {
+            categoryId = categoriesMap.get(productData.category);
+            if (!categoryId) {
+              console.log(`אזהרה: קטגוריה '${productData.category}' למוצר '${productData.name}' לא נמצאה`);
+              categoryMismatchCount++;
+            }
+          }
+          
+          // טיפול בוריאציות
+          const variations = processProductVariations(productData);
+          
+          // הכן את אובייקט המוצר לשמירה
+          const productToSave = {
+            name: productData.name,
+            category_id: categoryId,
+            image_url: productData.image_url || '',
+            price_before_vat: parseFloat(productData.price_before_vat) || 0,
+            price_with_vat: parseFloat(productData.price_with_vat) || 0,
+            variations: variations
+          };
+          
+          if (existingProduct) {
+            skippedCount++;
+          } else {
+            // הוסף מוצר חדש
+            await Product.create(productToSave);
+            addedCount++;
+          }
+        }
+        
+        // עדכן את מצב הייבוא
+        setImportStatus({
+          total: data.length,
+          added: addedCount,
+          skipped: skippedCount,
+          categoryMismatch: categoryMismatchCount,
+          inProgress: false
+        });
+        
+        // רענן את הנתונים
+        await loadData();
+        
+        // סגור את החלון לאחר 3 שניות אם הייבוא הצליח
+        setTimeout(() => {
+          if (addedCount > 0) {
+            setIsImportOpen(false);
+          }
+        }, 3000);
+        
+      };
+      
+      fileReader.readAsText(csvFile);
+      
+    } catch (error) {
+      console.error("שגיאה בייבוא מוצרים:", error);
+      setDeleteError(`שגיאה בייבוא מוצרים: ${error.message}`);
+      setImportStatus(prev => ({ ...prev, inProgress: false }));
+    }
+  };
+
   const filteredProducts = products
     .filter(p => selectedCategory === "all" || p.category_id === selectedCategory)
     .filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
@@ -400,6 +641,14 @@ export default function ProductsPage() {
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">מוצרים</h1>
           <div className="flex gap-2">
+            <Button 
+              variant="destructive" 
+              onClick={() => setIsDeleteAllOpen(true)}
+              title="מחק את כל המוצרים"
+            >
+              <AlertTriangle className="w-4 h-4 ml-2" />
+              מחק הכל
+            </Button>
             {selectedProducts.size > 0 && (
               <Button 
                 variant="outline"
@@ -410,12 +659,10 @@ export default function ProductsPage() {
                 ערוך {selectedProducts.size} מוצרים
               </Button>
             )}
-            <Link to="/BulkProductImport">
-              <Button variant="outline" className="flex items-center">
-                <Upload className="w-4 h-4 ml-2" />
-                <span>העלאת מוצרים מתמונות</span>
-              </Button>
-            </Link>
+            <Button onClick={() => setIsImportOpen(true)} variant="outline">
+              <Upload className="w-4 h-4 ml-2" />
+              ייבוא מוצרים
+            </Button>
             <Button onClick={() => setIsAddOpen(true)}>
               <Plus className="w-4 h-4 ml-2" />
               מוצר חדש
@@ -498,10 +745,34 @@ export default function ProductsPage() {
                         src={product.image_url} 
                         alt={product.name}
                         className="w-full h-full object-contain"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          e.target.parentNode.style.backgroundColor = '#f9fafb';
+                          const textDiv = document.createElement('div');
+                          textDiv.className = 'w-full h-full flex items-center justify-center';
+                          
+                          const packageIcon = document.createElement('div');
+                          packageIcon.className = 'flex flex-col items-center';
+                          
+                          const iconDiv = document.createElement('div');
+                          iconDiv.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-300"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.29 7 12 12 20.71 7"></polyline><line x1="12" y1="22" x2="12" y2="12"></line></svg>';
+                          
+                          const titleDiv = document.createElement('div');
+                          titleDiv.className = 'text-gray-500 font-medium text-sm mt-2';
+                          titleDiv.innerText = product.name;
+                          
+                          packageIcon.appendChild(iconDiv);
+                          packageIcon.appendChild(titleDiv);
+                          textDiv.appendChild(packageIcon);
+                          e.target.parentNode.appendChild(textDiv);
+                        }}
                       />
                     ) : (
                       <div className="w-full h-full bg-gray-50 flex items-center justify-center">
-                        <Package className="w-12 h-12 text-gray-300" />
+                        <div className="flex flex-col items-center">
+                          <Package className="w-12 h-12 text-gray-300" />
+                          <span className="text-gray-500 font-medium text-sm mt-2">{product.name}</span>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -715,6 +986,87 @@ export default function ProductsPage() {
                 disabled={!bulkEditData.category_id && !bulkEditData.price_with_vat}
               >
                 עדכן מוצרים
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* דיאלוג אישור מחיקת כל המוצרים */}
+        <AlertDialog open={isDeleteAllOpen} onOpenChange={setIsDeleteAllOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>האם אתה בטוח שברצונך למחוק את כל המוצרים?</AlertDialogTitle>
+              <AlertDialogDescription>
+                פעולה זו תמחק את כל המוצרים במערכת ואינה ניתנת לביטול.
+                מומלץ לגבות את הנתונים לפני ביצוע פעולה זו.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>ביטול</AlertDialogCancel>
+              <AlertDialogAction 
+                onClick={deleteAllProducts} 
+                className="bg-red-500 hover:bg-red-600"
+                disabled={isDeletingAll}
+              >
+                {isDeletingAll ? (
+                  <div className="flex items-center">
+                    <div className="animate-spin h-4 w-4 border-2 border-b-transparent rounded-full ml-2"></div>
+                    מוחק...
+                  </div>
+                ) : "מחק את כל המוצרים"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <Dialog open={isImportOpen} onOpenChange={setIsImportOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>ייבוא מוצרים מקובץ CSV</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">קובץ CSV</label>
+                <Input 
+                  type="file" 
+                  accept=".csv" 
+                  onChange={handleCsvFileChange}
+                  disabled={importStatus.inProgress}
+                />
+                <p className="text-sm text-gray-500 mt-2">
+                  הקובץ צריך להכיל את העמודות: name, category_id, category_name, image_url, price_before_vat, price_with_vat, variations
+                </p>
+              </div>
+              
+              {deleteError && (
+                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                  {deleteError}
+                </div>
+              )}
+              
+              {!importStatus.inProgress && importStatus.total > 0 && (
+                <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
+                  <p>הייבוא הושלם בהצלחה!</p>
+                  <p>סה"כ: {importStatus.total}</p>
+                  <p>נוספו: {importStatus.added}</p>
+                  <p>דולגו: {importStatus.skipped}</p>
+                  {importStatus.categoryMismatch > 0 && (
+                    <p>שגיאות קטגוריה: {importStatus.categoryMismatch}</p>
+                  )}
+                </div>
+              )}
+            </div>
+            <DialogFooter>
+              <Button
+                onClick={importProductsFromCsv}
+                disabled={!csvFile || importStatus.inProgress}
+              >
+                {importStatus.inProgress ? (
+                  <div className="flex items-center">
+                    <div className="animate-spin h-4 w-4 border-2 border-b-transparent rounded-full ml-2"></div>
+                    מייבא...
+                  </div>
+                ) : "התחל ייבוא"}
               </Button>
             </DialogFooter>
           </DialogContent>
