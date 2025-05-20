@@ -1,0 +1,24 @@
+{
+  "rewrites": [
+    {
+      "source": "/login-admin",
+      "destination": "/login-admin"
+    },
+    {
+      "source": "/login-client",
+      "destination": "/login-client"
+    },
+    {
+      "source": "/admin/:path*",
+      "destination": "/admin/:path*"
+    },
+    {
+      "source": "/client/:path*",
+      "destination": "/client/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/"
+    }
+  ]
+} 
