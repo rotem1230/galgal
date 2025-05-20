@@ -47,9 +47,10 @@ const callViaProxy = async (method, endpoint, data = null, params = {}) => {
   
   // הוספת פרמטרים בסיסיים ל-iCount
   const requestParams = {
-    ...params,
+    path, // חשוב - מעביר את ה-path כפרמטר
     cid: icountConfig.companyId,
     username: icountConfig.username,
+    ...params // שאר הפרמטרים
   };
 
   // הכנת headers עם token אם יש
@@ -63,7 +64,14 @@ const callViaProxy = async (method, endpoint, data = null, params = {}) => {
 
   try {
     let response;
-    const apiUrl = `/api/icount?path=${path}`;
+    const apiUrl = `/api/icount`; // עכשיו ה-path עובר כפרמטר
+    
+    console.log(`שולח בקשת ${method} ל-iCount:`, {
+      url: apiUrl,
+      params: requestParams,
+      headers,
+      data: method === 'POST' ? data : undefined
+    });
     
     if (method === 'GET') {
       response = await axios.get(apiUrl, { params: requestParams, headers });
@@ -75,6 +83,16 @@ const callViaProxy = async (method, endpoint, data = null, params = {}) => {
     return response.data;
   } catch (error) {
     console.error(`שגיאה בבקשת ${method} ל-${endpoint}:`, error);
+    
+    // לוג מפורט יותר של השגיאה
+    if (error.response) {
+      console.error('פרטי השגיאה:', {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        data: error.response.data
+      });
+    }
+    
     throw error;
   }
 };
