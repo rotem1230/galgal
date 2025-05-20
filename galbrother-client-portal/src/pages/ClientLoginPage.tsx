@@ -23,9 +23,9 @@ const ClientLoginPage: React.FC = () => {
     try {
       console.log(`Attempting login with email: ${email}`);
       await signInWithEmailAndPassword(auth, email, password);
-      // ההפניה צריכה לקרות אוטומטית בזכות ה-Context ו-ProtectedRoute - ***הערה לא נכונה, נוסיף הפניה ידנית***
-      navigate('/'); // <-- הוספת הפניה לדף הבית לאחר התחברות מוצלחת
-      console.log('Login successful, navigating to home page...');
+      // ההפניה צריכה להיות לפורטל הלקוחות
+      navigate('/client'); // <-- שינוי מ-'/' ל-'/client'
+      console.log('Login successful, navigating to client portal...');
     } catch (err: any) { // שים לב לטיפול בשגיאות
       console.error("Login failed:", err.code, err.message);
       // תרגום הודעות שגיאה נפוצות לעברית
