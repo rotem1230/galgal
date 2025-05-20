@@ -51,7 +51,7 @@ export default function LoginPage() {
           <img 
             src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6fd839__-removebg-preview.png" 
             alt="לוגו האחים גל" 
-            className="w-32 h-32 mx-auto object-contain mb-4"
+            className="w-64 h-64 mx-auto object-contain mb-4"
           />
           <CardTitle className="text-3xl font-bold text-gray-800">מערכת ניהול - האחים גל</CardTitle>
           <CardDescription className="text-gray-600">נא להזין פרטי התחברות</CardDescription>
