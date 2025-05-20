@@ -631,9 +631,23 @@ export default function ProductsPage() {
     }
   };
 
+  // סינון המוצרים לפי קטגוריה וחיפוש
   const filteredProducts = products
     .filter(p => selectedCategory === "all" || p.category_id === selectedCategory)
-    .filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
+    .filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()))
+    // מיון המוצרים כך שמוצרים עם תמונות יופיעו ראשונים
+    .sort((a, b) => {
+      // בדיקה האם יש למוצר תמונה תקינה
+      const aHasImage = !!a.image_url;
+      const bHasImage = !!b.image_url;
+      
+      // מיון - מוצרים עם תמונות קודם, ואז מוצרים ללא תמונות
+      if (aHasImage && !bHasImage) return -1;  // a יוצג קודם
+      if (!aHasImage && bHasImage) return 1;   // b יוצג קודם
+      
+      // אם לשניהם יש או אין תמונה, שמור על הסדר הרגיל
+      return 0;
+    });
 
   return (
     <div className="container mx-auto py-6 space-y-6">
