@@ -8,9 +8,16 @@ export default defineConfig({
   server: {
     allowedHosts: true
   },
+  build: {
+    outDir: 'dist',
+    // מאפשר סימבולים ישראליים בבנייה
+    assetsInlineLimit: 0,
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      // קובעים אליאס לפרויקט פורטל הלקוחות
+      '@client': path.resolve(__dirname, './galbrother-client-portal/src'),
     },
     extensions: ['.mjs', '.js', '.jsx', '.ts', '.tsx', '.json']
   },
@@ -20,5 +27,7 @@ export default defineConfig({
         '.js': 'jsx',
       },
     },
+    // כולל תלויות מפרויקט הלקוחות
+    include: ['./galbrother-client-portal/src/**/*'],
   },
 }) 

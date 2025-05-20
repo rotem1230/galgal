@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>האחים גל - בחירת פורטל</title>
+    <link rel="icon" type="image/png" href="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6fd839__-removebg-preview.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* מאפס את כל הסגנונות */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Heebo', sans-serif;
+            background: linear-gradient(135deg, #f0f4ff 0%, #e6f0fb 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1000px;
+            width: 100%;
+            text-align: center;
+        }
+        
+        .logo {
+            width: 120px;
+            height: auto;
+            margin-bottom: 20px;
+            animation: float 6s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-15px); }
+            100% { transform: translateY(0px); }
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        p {
+            color: #666;
+            font-size: 1.2rem;
+            margin-bottom: 40px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .cards-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 50px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            width: 320px;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+        }
+        
+        .card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 30px -10px rgba(0, 0, 0, 0.15);
+        }
+        
+        .card-admin {
+            border-top: 5px solid #3b82f6;
+        }
+        
+        .card-client {
+            border-top: 5px solid #10b981;
+        }
+        
+        .card-body {
+            padding: 30px 20px;
+        }
+        
+        .card-icon {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+        }
+        
+        .card-admin .card-icon {
+            background-color: #dbeafe;
+        }
+        
+        .card-client .card-icon {
+            background-color: #d1fae5;
+        }
+        
+        .card h2 {
+            font-size: 1.5rem;
+            margin-bottom: 15px;
+            color: #333;
+        }
+        
+        .card p {
+            font-size: 1rem;
+            color: #666;
+            margin-bottom: 25px;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.2s ease;
+            cursor: pointer;
+            font-size: 1rem;
+            width: 100%;
+        }
+        
+        .btn-admin {
+            background-color: #3b82f6;
+            color: white;
+        }
+        
+        .btn-admin:hover {
+            background-color: #2563eb;
+        }
+        
+        .btn-client {
+            background-color: #10b981;
+            color: white;
+        }
+        
+        .btn-client:hover {
+            background-color: #059669;
+        }
+        
+        .status {
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 10px;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-left: 6px;
+        }
+        
+        .status-admin .status-dot {
+            background-color: #3b82f6;
+        }
+        
+        .status-client .status-dot {
+            background-color: #10b981;
+        }
+        
+        footer {
+            margin-top: auto;
+            text-align: center;
+            padding: 20px;
+            color: #666;
+            font-size: 0.875rem;
+        }
+        
+        @media (max-width: 700px) {
+            .cards-container {
+                flex-direction: column;
+                align-items: center;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+            
+            p {
+                font-size: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <img src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6fd839__-removebg-preview.png" alt="לוגו האחים גל" class="logo">
+        <h1>ברוכים הבאים למערכת האחים גל</h1>
+        <p>בחר את סוג הפורטל אליו תרצה להתחבר בסביבת הפיתוח המקומית</p>
+        
+        <div class="cards-container">
+            <!-- כרטיס פורטל ניהול -->
+            <div class="card card-admin">
+                <div class="card-body">
+                    <div class="card-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="#3b82f6" viewBox="0 0 24 24">
+                            <path d="M17.671 14.307C16.184 12.819 14.17 12 12 12c-2.169 0-4.184.819-5.671 2.307l1.414 1.414C8.93 14.535 10.413 14 12 14c1.587 0 3.07.535 4.257 1.721l1.414-1.414zM12 8c-4.411 0-8 3.589-8 8h2c0-3.309 2.691-6 6-6s6 2.691 6 6h2c0-4.411-3.589-8-8-8z"></path>
+                            <path d="M12 2C6.579 2 2 6.579 2 12h2c0-4.337 3.663-8 8-8s8 3.663 8 8h2c0-5.421-4.579-10-10-10z"></path>
+                            <circle cx="12" cy="16.5" r="3.5"></circle>
+                        </svg>
+                    </div>
+                    <h2>פורטל ניהול</h2>
+                    <p>גישה למנהלי ועובדי החברה בלבד. ניהול מוצרים, הזמנות, לקוחות ונתונים.</p>
+                    <a href="/login-admin" class="btn btn-admin">כניסה לפורטל הניהול</a>
+                    <div class="status status-admin">
+                        <span class="status-dot"></span>
+                        פורטל ניהול
+                    </div>
+                </div>
+            </div>
+            
+            <!-- כרטיס פורטל לקוחות -->
+            <div class="card card-client">
+                <div class="card-body">
+                    <div class="card-icon">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" fill="#10b981" viewBox="0 0 24 24">
+                            <path d="M19 7h-3V6c0-1.103-.897-2-2-2H10C8.897 4 8 4.897 8 6v1H5c-1.103 0-2 .897-2 2v11c0 1.103.897 2 2 2h14c1.103 0 2-.897 2-2V9c0-1.103-.897-2-2-2zM6 18V8h2v2h8V8h2l.001 10H6z"></path>
+                            <path d="M12 12c-2 0-3 1-3 2.5V17h6v-2.5c0-1.5-1-2.5-3-2.5z"></path>
+                            <circle cx="12" cy="9" r="2"></circle>
+                        </svg>
+                    </div>
+                    <h2>פורטל לקוחות</h2>
+                    <p>גישה ללקוחות החברה. צפייה במוצרים, ביצוע הזמנות, מעקב אחר סטטוס ועוד.</p>
+                    <a href="/login-client" class="btn btn-client">כניסה לפורטל הלקוחות</a>
+                    <div class="status status-client">
+                        <span class="status-dot"></span>
+                        פורטל לקוחות
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <footer>
+        © האחים גל 2024. כל הזכויות שמורות.
+    </footer>
+</body>
+</html> 

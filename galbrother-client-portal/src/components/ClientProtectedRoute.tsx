@@ -10,8 +10,8 @@ const ClientProtectedRoute: React.FC<ClientProtectedRouteProps> = ({ children })
   const { isAuthenticated } = useClientAuth();
 
   if (!isAuthenticated) {
-    // אם המשתמש לא מאומת, הפנה אותו לדף ההתחברות
-    return <Navigate to="/login" replace />;
+    // אם המשתמש לא מאומת, הפנה אותו לדף ההתחברות החדש
+    return <Navigate to="/login-client" replace />;
   }
 
   // אם המשתמש מאומת, הצג את התוכן המוגן
