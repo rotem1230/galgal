@@ -1,6 +1,10 @@
 {
   "rewrites": [
     {
+      "source": "/api/icount",
+      "destination": "/api/icount.js"
+    },
+    {
       "source": "/login-admin",
       "destination": "/login-admin"
     },

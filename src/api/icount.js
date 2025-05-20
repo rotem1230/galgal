@@ -35,6 +35,51 @@ export const loadIcountConfig = () => {
 };
 
 /**
+ * פונקציית עזר לביצוע בקשות דרך ה-proxy במקום ישירות ל-iCount
+ * @param {string} method - סוג הבקשה (GET/POST)
+ * @param {string} endpoint - נקודת הקצה ב-API
+ * @param {Object} data - נתונים לשליחה (רק ב-POST)
+ * @param {Object} params - פרמטרים לשאילתה
+ */
+const callViaProxy = async (method, endpoint, data = null, params = {}) => {
+  // הסרת ה-slash מתחילת ה-endpoint אם קיים
+  const path = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
+  
+  // הוספת פרמטרים בסיסיים ל-iCount
+  const requestParams = {
+    ...params,
+    cid: icountConfig.companyId,
+    username: icountConfig.username,
+  };
+
+  // הכנת headers עם token אם יש
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+  
+  if (icountConfig.userApiToken) {
+    headers['Authorization'] = `Bearer ${icountConfig.userApiToken}`;
+  }
+
+  try {
+    let response;
+    const apiUrl = `/api/icount?path=${path}`;
+    
+    if (method === 'GET') {
+      response = await axios.get(apiUrl, { params: requestParams, headers });
+    } else if (method === 'POST') {
+      // עבור POST, שלח את הנתונים ב-body ואת הפרמטרים ב-query
+      response = await axios.post(apiUrl, data, { params: requestParams, headers });
+    }
+    
+    return response.data;
+  } catch (error) {
+    console.error(`שגיאה בבקשת ${method} ל-${endpoint}:`, error);
+    throw error;
+  }
+};
+
+/**
  * בדיקה האם החיבור ל-iCount מוגדר ועובד
  * @returns {Promise<boolean>} - מחזיר האם החיבור תקין
  */
@@ -46,46 +91,11 @@ export const testIcountConnection = async () => {
     }
 
     // בדיקת חיבור על ידי קריאה לאחד ה-endpoints, למשל רשימת לקוחות
-    const response = await axios.get(`${icountConfig.apiEndpoint}/client/list`, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${icountConfig.userApiToken}`
-      },
-      params: {
-        'cid': icountConfig.companyId,
-        'username': icountConfig.username
-      }
-    });
-
-    return response.status === 200;
+    const response = await callViaProxy('GET', 'client/list');
+    return response && !response.error;
   } catch (error) {
     console.error('שגיאה בבדיקת חיבור ל-iCount:', error);
     return false;
-  }
-};
-
-/**
- * יצירת לקוח חדש ב-iCount (אם לא קיים)
- * @param {Object} customer - פרטי הלקוח
- * @returns {Promise<string>} - מזהה הלקוח ב-iCount
- */
-export const createOrUpdateClient = async (customer) => {
-  try {
-    // בדיקת קיום לקוח לפי מייל או טלפון
-    const existingClients = await searchClients(customer.email || customer.phone);
-    
-    if (existingClients && existingClients.length > 0) {
-      // עדכון לקוח קיים
-      const clientId = existingClients[0].id;
-      await updateClient(clientId, customer);
-      return clientId;
-    } else {
-      // יצירת לקוח חדש
-      return await createNewClient(customer);
-    }
-  } catch (error) {
-    console.error('שגיאה בעדכון/יצירת לקוח ב-iCount:', error);
-    throw error;
   }
 };
 
@@ -98,19 +108,8 @@ const searchClients = async (searchTerm) => {
   if (!searchTerm) return [];
   
   try {
-    const response = await axios.get(`${icountConfig.apiEndpoint}/client/list`, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${icountConfig.userApiToken}`
-      },
-      params: {
-        'cid': icountConfig.companyId,
-        'username': icountConfig.username,
-        'search': searchTerm
-      }
-    });
-
-    return response.data?.data || [];
+    const response = await callViaProxy('GET', 'client/list', null, { search: searchTerm });
+    return response?.data || [];
   } catch (error) {
     console.error('שגיאה בחיפוש לקוחות ב-iCount:', error);
     return [];
@@ -125,8 +124,6 @@ const searchClients = async (searchTerm) => {
 const createNewClient = async (customer) => {
   try {
     const clientData = {
-      cid: icountConfig.companyId,
-      username: icountConfig.username,
       client_name: customer.name,
       email: customer.email || '',
       phone: customer.phone || '',
@@ -135,17 +132,12 @@ const createNewClient = async (customer) => {
       active: 1
     };
 
-    const response = await axios.post(`${icountConfig.apiEndpoint}/client/create`, clientData, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${icountConfig.userApiToken}`
-      }
-    });
+    const response = await callViaProxy('POST', 'client/create', clientData);
 
-    if (response.data?.status === 'success') {
-      return response.data.data.id;
+    if (response?.status === 'success') {
+      return response.data.id;
     } else {
-      throw new Error('שגיאה ביצירת לקוח: ' + response.data?.message);
+      throw new Error('שגיאה ביצירת לקוח: ' + response?.message);
     }
   } catch (error) {
     console.error('שגיאה ביצירת לקוח ב-iCount:', error);
@@ -161,8 +153,6 @@ const createNewClient = async (customer) => {
 const updateClient = async (clientId, customer) => {
   try {
     const clientData = {
-      cid: icountConfig.companyId,
-      username: icountConfig.username,
       id: clientId,
       client_name: customer.name,
       email: customer.email || '',
@@ -171,14 +161,48 @@ const updateClient = async (clientId, customer) => {
       city: customer.city || ''
     };
 
-    await axios.post(`${icountConfig.apiEndpoint}/client/update`, clientData, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${icountConfig.userApiToken}`
-      }
-    });
+    await callViaProxy('POST', 'client/update', clientData);
   } catch (error) {
     console.error('שגיאה בעדכון לקוח ב-iCount:', error);
+    throw error;
+  }
+};
+
+/**
+ * חיפוש לקוח ב-iCount לפי אימייל/טלפון והוספה/עדכון במידת הצורך
+ * @param {Object} customer - פרטי הלקוח
+ * @returns {Promise<string>} - מזהה הלקוח ב-iCount
+ */
+export const createOrUpdateClient = async (customer) => {
+  try {
+    // חיפוש לקוח קיים לפי אימייל
+    let clientId = null;
+    if (customer.email) {
+      const clients = await searchClients(customer.email);
+      if (clients && clients.length > 0) {
+        clientId = clients[0].id;
+      }
+    }
+    
+    // אם לא נמצא לפי אימייל, ננסה לפי טלפון
+    if (!clientId && customer.phone) {
+      const clients = await searchClients(customer.phone);
+      if (clients && clients.length > 0) {
+        clientId = clients[0].id;
+      }
+    }
+    
+    // אם הלקוח נמצא, נעדכן אותו
+    if (clientId) {
+      await updateClient(clientId, customer);
+      return clientId;
+    } 
+    // אחרת ניצור לקוח חדש
+    else {
+      return await createNewClient(customer);
+    }
+  } catch (error) {
+    console.error('שגיאה בחיפוש/יצירת לקוח ב-iCount:', error);
     throw error;
   }
 };
@@ -192,8 +216,6 @@ const updateClient = async (clientId, customer) => {
 export const createInvoice = async (order, clientId) => {
   try {
     const invoiceData = {
-      cid: icountConfig.companyId,
-      username: icountConfig.username,
       client_id: clientId,
       doc_type: 'invoice', // או 'receipt' לקבלה
       items: order.items.map(item => ({
@@ -207,21 +229,16 @@ export const createInvoice = async (order, clientId) => {
       payment_type: order.paymentMethod || 'CREDIT',
     };
 
-    const response = await axios.post(`${icountConfig.apiEndpoint}/doc/create`, invoiceData, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${icountConfig.userApiToken}`
-      }
-    });
+    const response = await callViaProxy('POST', 'doc/create', invoiceData);
 
-    if (response.data?.status === 'success') {
+    if (response?.status === 'success') {
       return {
-        invoiceId: response.data.data.id,
-        invoiceNumber: response.data.data.doc_number,
-        invoiceUrl: response.data.data.doc_url
+        invoiceId: response.data.id,
+        invoiceNumber: response.data.doc_number,
+        invoiceUrl: response.data.doc_url
       };
     } else {
-      throw new Error('שגיאה ביצירת חשבונית: ' + response.data?.message);
+      throw new Error('שגיאה ביצירת חשבונית: ' + response?.message);
     }
   } catch (error) {
     console.error('שגיאה ביצירת חשבונית ב-iCount:', error);
