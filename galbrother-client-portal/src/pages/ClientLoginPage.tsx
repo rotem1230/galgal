@@ -45,7 +45,11 @@ const ClientLoginPage: React.FC = () => {
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-100 p-4" dir="rtl">
       <div className="bg-white p-8 rounded-lg shadow-lg border border-blue-500 w-full max-w-md">
         <div className="flex justify-center mb-6">
-          <img src="/logo.png" alt="לוגו Gal Brothers" className="h-14 w-auto" />
+          <img 
+            src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6fd839__-removebg-preview.png" 
+            alt="לוגו Gal Brothers" 
+            className="h-14 w-auto" 
+          />
         </div>
 
         <div className="text-center mb-8">
