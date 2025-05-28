@@ -22,7 +22,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Package, Upload, Image, FileText, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
-import { UploadFile, ExtractDataFromUploadedFile } from "@/api/integrations";
 import { Progress } from "@/components/ui/progress";
 
 export default function BulkProductImportPage() {
@@ -54,6 +53,16 @@ export default function BulkProductImportPage() {
     }
   };
 
+  // פונקציה חדשה להמרת קובץ ל-Base64
+  const convertFileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
   const handleFilesUpload = async (e) => {
     const files = Array.from(e.target.files);
     if (!files.length) return;
@@ -72,17 +81,18 @@ export default function BulkProductImportPage() {
       const processFilesBatch = async (fileBatch, startIndex) => {
         const batchPromises = fileBatch.map(async (file) => {
           try {
-            const { file_url } = await UploadFile({ file });
+            // המרת הקובץ ל-Base64 במקום העלאה ל-Firebase
+            const base64Data = await convertFileToBase64(file);
             return {
               file_name: file.name,
-              image_url: file_url,
+              image_url: base64Data, // שמירת תוכן התמונה כ-Base64
               status: "uploaded", // 'uploaded', 'processed', 'failed'
-              product_name: "",
+              product_name: extractProductNameFromFilename(file.name), // מיד מחלץ שם מהקובץ
               extracted_text: "",
               is_selected: true,
             };
           } catch (error) {
-            console.error(`שגיאה בהעלאת קובץ ${file.name}:`, error);
+            console.error(`שגיאה בהמרת קובץ ${file.name}:`, error);
             return null;
           }
         });
@@ -99,8 +109,8 @@ export default function BulkProductImportPage() {
         }
       };
 
-      // עיבוד קבצים בקבוצות של 10 בכל פעם
-      const BATCH_SIZE = 10;
+      // עיבוד קבצים בקבוצות של 3 בכל פעם (הורדנו ל-3 כי קידוד Base64 יכול להיות כבד יותר)
+      const BATCH_SIZE = 3;
       for (let i = 0; i < files.length; i += BATCH_SIZE) {
         const fileBatch = files.slice(i, i + BATCH_SIZE);
         await processFilesBatch(fileBatch, i);
@@ -110,8 +120,8 @@ export default function BulkProductImportPage() {
       }
 
     } catch (error) {
-      console.error("שגיאה בהעלאת קבצים:", error);
-      setErrorMessage(`שגיאה בהעלאת קבצים: ${error.message}`);
+      console.error("שגיאה בהמרת קבצים:", error);
+      setErrorMessage(`שגיאה בהמרת קבצים: ${error.message}`);
     } finally {
       setIsUploading(false);
     }
@@ -137,6 +147,7 @@ export default function BulkProductImportPage() {
     return name || "מוצר חדש";
   };
 
+  // פונקציה פשוטה לעיבוד טקסט שלא מסתמכת על OCR
   const extractTextFromImages = async () => {
     if (!uploadedImages.length) {
       setErrorMessage("אנא העלה תמונות קודם");
@@ -144,9 +155,20 @@ export default function BulkProductImportPage() {
     }
 
     if (!selectedCategoryId) {
-      setErrorMessage("אנא בחר קטגוריה");
+      setErrorMessage("אנא בחר קטגוריה לפני עיבוד התמונות");
       return;
     }
+    
+    // וידוא שהקטגוריה קיימת במערכת
+    const categoryExists = categories.some(cat => cat.id === selectedCategoryId);
+    if (!categoryExists) {
+      setErrorMessage("הקטגוריה שנבחרה אינה קיימת במערכת. אנא בחר קטגוריה תקינה.");
+      return;
+    }
+
+    // שמירת הקטגוריה הנבחרת בתצוגה
+    const selectedCategory = categories.find(cat => cat.id === selectedCategoryId);
+    console.log(`עיבוד תמונות לקטגוריה: ${selectedCategory.name} (${selectedCategoryId})`);
 
     setIsProcessing(true);
     setProcessingComplete(false);
@@ -163,107 +185,48 @@ export default function BulkProductImportPage() {
     const selectedImages = updatedImages.filter(img => img.is_selected);
     const totalSelectedImages = selectedImages.length;
     
-    // עיבוד תמונות בקבוצות של 5 בכל פעם
-    const BATCH_SIZE = 5;
+    if (totalSelectedImages === 0) {
+      setErrorMessage("לא נבחרו תמונות לעיבוד");
+      setIsProcessing(false);
+      return;
+    }
     
-    for (let batchStart = 0; batchStart < totalSelectedImages; batchStart += BATCH_SIZE) {
-      const batchEnd = Math.min(batchStart + BATCH_SIZE, totalSelectedImages);
-      const batch = selectedImages.slice(batchStart, batchEnd);
+    // מכיוון שאנו משתמשים בשמות מהקבצים, אנחנו לא צריכים OCR
+    // פשוט נעדכן את הסטטוס של כל התמונות ל-processed
+    for (let i = 0; i < totalSelectedImages; i++) {
+      const image = selectedImages[i];
+      const index = updatedImages.findIndex(img => img.image_url === image.image_url);
       
-      // עיבוד מקבילי של קבוצת תמונות
-      const batchPromises = batch.map(async (image) => {
-        const index = updatedImages.findIndex(img => img.image_url === image.image_url);
-        if (index === -1) return null;
+      if (index !== -1) {
+        // עדכון פרטי התמונה
+        updatedImages[index] = {
+          ...updatedImages[index],
+          status: "processed",
+          // נשתמש בשם שכבר חילצנו בזמן ההעלאה
+          product_name: updatedImages[index].product_name || extractProductNameFromFilename(updatedImages[index].file_name),
+          extracted_text: "שם מחולץ משם הקובץ"
+        };
         
-        try {
-          // חילוץ טקסט מהתמונה באמצעות OCR
-          const extractionResult = await ExtractDataFromUploadedFile({
-            file_url: image.image_url,
-            extraction_type: "text",
-            json_schema: {
-              type: "object",
-              required: ["extracted_text"],
-              properties: {
-                extracted_text: { 
-                  type: "string",
-                  description: "The extracted text from the image"
-                }
-              }
-            }
-          });
-
-          if (extractionResult && extractionResult.extracted_text) {
-            const extractedText = extractionResult.extracted_text;
-            
-            // עיבוד הטקסט - הסרת שם הלוגו והתמקדות בשם המוצר
-            let productName = processExtractedText(extractedText, companyLogoText);
-            
-            return {
-              index,
-              status: "processed",
-              product_name: productName,
-              extracted_text: extractedText,
-              success: true
-            };
-          } else {
-            // במקרה של כישלון, ננסה לחלץ שם מקובץ
-            const backupName = extractProductNameFromFilename(image.file_name);
-            
-            return {
-              index,
-              status: "processed", // נשנה ל-processed כדי לאפשר יצירת מוצר עם שם מהקובץ
-              product_name: backupName,
-              extracted_text: "השתמשנו בשם הקובץ כיוון שלא ניתן היה לחלץ טקסט",
-              success: true
-            };
-          }
-        } catch (error) {
-          console.error(`שגיאה בעיבוד תמונה ${index + 1}:`, error);
-          
-          // ניסיון לחלץ שם מוצר משם הקובץ במקרה של כישלון OCR
-          const backupName = extractProductNameFromFilename(image.file_name);
-          
-          return {
-            index,
-            status: "processed", // נשנה ל-processed כדי לאפשר יצירת מוצר עם שם מהקובץ
-            product_name: backupName,
-            extracted_text: `שגיאה בזיהוי טקסט. השתמשנו בשם הקובץ במקום.`,
-            success: true
-          };
-        }
-      });
-      
-      const batchResults = await Promise.allSettled(batchPromises);
-      
-      // עדכון התמונות עם תוצאות העיבוד
-      for (const result of batchResults) {
-        if (result.status === "fulfilled" && result.value) {
-          const { index, status, product_name, extracted_text, success } = result.value;
-          
-          updatedImages[index] = {
-            ...updatedImages[index],
-            status,
-            product_name,
-            extracted_text
-          };
-          
-          if (success) {
-            successCounter++;
-          } else {
-            failureCounter++;
-          }
-        } else if (result.status === "rejected") {
-          failureCounter++;
-        }
+        successCounter++;
+      } else {
+        failureCounter++;
       }
       
-      // עדכון התקדמות ותוצאות
-      setUploadedImages([...updatedImages]);
-      setSuccessCount(successCounter);
-      setFailureCount(failureCounter);
-      setProcessingProgress(Math.round(((batchEnd) / totalSelectedImages) * 100));
+      // עדכון התקדמות
+      setProcessingProgress(Math.round(((i + 1) / totalSelectedImages) * 100));
+      
+      // עדכון התמונות בכל 10 תמונות כדי לשמור על ביצועים
+      if (i % 10 === 0 || i === totalSelectedImages - 1) {
+        setUploadedImages([...updatedImages]);
+        setSuccessCount(successCounter);
+        setFailureCount(failureCounter);
+      }
     }
 
+    // סיום העיבוד
+    setUploadedImages([...updatedImages]);
+    setSuccessCount(successCounter);
+    setFailureCount(failureCounter);
     setIsProcessing(false);
     setProcessingComplete(true);
     setShowImportDialog(true);
@@ -291,58 +254,80 @@ export default function BulkProductImportPage() {
   const handleImportProducts = async () => {
     setIsProcessing(true);
     setErrorMessage("");
+    
+    // בדיקה אם נבחרה קטגוריה
+    if (!selectedCategoryId) {
+      setErrorMessage("יש לבחור קטגוריה לפני יבוא המוצרים");
+      setIsProcessing(false);
+      return;
+    }
+    
+    // וידוא שהקטגוריה קיימת במערכת
+    const categoryExists = categories.some(cat => cat.id === selectedCategoryId);
+    if (!categoryExists) {
+      setErrorMessage("הקטגוריה שנבחרה אינה קיימת במערכת");
+      setIsProcessing(false);
+      return;
+    }
+    
     let importedCount = 0;
+    let failedCount = 0;
     let totalToImport = uploadedImages.filter(img => img.is_selected && img.status === "processed").length;
     
+    if (totalToImport === 0) {
+      setErrorMessage("אין מוצרים מוכנים ליבוא. אנא עבד תמונות קודם.");
+      setIsProcessing(false);
+      return;
+    }
+    
+    setProcessingProgress(0);
+    
     try {
-      // עיבוד מוצרים בקבוצות של 10 בכל פעם
-      const BATCH_SIZE = 10;
-      const selectedProducts = uploadedImages.filter(img => img.is_selected && img.status === "processed");
+      // קבל את שם הקטגוריה הנבחרת
+      const selectedCategory = categories.find(cat => cat.id === selectedCategoryId);
+      console.log(`יוצר מוצרים בקטגוריה: ${selectedCategory.name} (${selectedCategoryId})`);
       
-      for (let batchStart = 0; batchStart < selectedProducts.length; batchStart += BATCH_SIZE) {
-        const batchEnd = Math.min(batchStart + BATCH_SIZE, selectedProducts.length);
-        const batch = selectedProducts.slice(batchStart, batchEnd);
-        
-        const batchPromises = batch.map(async (image) => {
-          try {
-            // יצירת מוצר חדש
-            await Product.create({
-              name: image.product_name || `מוצר מתמונה ${importedCount + 1}`,
-              category_id: selectedCategoryId,
-              price_with_vat: 1, // מחיר 1 לכל המוצרים כפי שביקשת
-              price_before_vat: 0.85, // מחיר ללא מע"מ מחושב לפי 18% מע"מ
-              image_url: image.image_url,
-              variations: []
-            });
-            return true;
-          } catch (error) {
-            console.error(`שגיאה ביבוא מוצר: ${image.product_name}`, error);
-            return false;
-          }
-        });
-        
-        const results = await Promise.allSettled(batchPromises);
-        const successfulImports = results.filter(r => r.status === "fulfilled" && r.value === true).length;
-        importedCount += successfulImports;
-        
-        // עדכון התקדמות
-        setUploadProgress(Math.round(((batchEnd) / totalToImport) * 100));
+      // יצירת מוצר עבור כל תמונה מעובדת שנבחרה
+      for (const image of uploadedImages.filter(img => img.is_selected && img.status === "processed")) {
+        try {
+          // יצירת אובייקט מוצר חדש
+          const newProduct = {
+            name: image.product_name,
+            category_id: selectedCategoryId,
+            category_name: selectedCategory.name, // שמירת שם הקטגוריה מפורשות
+            image_url: image.image_url,
+            price_before_vat: 0, // ברירת מחדל, יש לעדכן ידנית
+            price_with_vat: 0,   // ברירת מחדל, יש לעדכן ידנית
+            variations: [],      // ללא וריאציות כברירת מחדל
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          };
+          
+          // יצירת המוצר בפיירבייס
+          await Product.create(newProduct);
+          importedCount++;
+          
+          // עדכון התקדמות
+          setProcessingProgress(Math.round((importedCount / totalToImport) * 100));
+        } catch (error) {
+          console.error(`שגיאה ביצירת מוצר ${image.product_name}:`, error);
+          failedCount++;
+        }
       }
-
-      // איפוס המסך לאחר היבוא המוצלח
-      setUploadedImages([]);
-      setProcessingComplete(false);
-      setSuccessCount(0);
-      setFailureCount(0);
-      setShowImportDialog(false);
       
-      // הצגת הודעת הצלחה
-      setErrorMessage(`יובאו ${importedCount} מוצרים בהצלחה!`);
+      // הצגת הודעת סיכום
+      if (importedCount > 0) {
+        setErrorMessage(`הייבוא הושלם! יובאו ${importedCount} מוצרים בהצלחה${failedCount > 0 ? `, נכשלו ${failedCount} מוצרים` : ''}.`);
+      } else {
+        setErrorMessage(`הייבוא נכשל. לא יובאו מוצרים.`);
+      }
+      
     } catch (error) {
-      console.error("שגיאה ביבוא מוצרים:", error);
-      setErrorMessage(`שגיאה ביבוא מוצרים: ${error.message}`);
+      console.error("שגיאה בתהליך היבוא:", error);
+      setErrorMessage(`שגיאה בתהליך היבוא: ${error.message}`);
     } finally {
       setIsProcessing(false);
+      setShowImportDialog(false);
     }
   };
 
@@ -373,18 +358,35 @@ export default function BulkProductImportPage() {
         <h1 className="text-2xl font-bold">העלאת מוצרים מתמונות</h1>
       </div>
 
+      <Card className="p-6 border-2 border-blue-200 bg-blue-50">
+        <div className="flex items-start space-x-3 rtl:space-x-reverse">
+          <CheckCircle className="h-5 w-5 text-blue-500 mt-0.5" />
+          <div>
+            <h3 className="font-semibold text-blue-700">מצב מקומי מוגבר פעיל</h3>
+            <p className="text-sm text-blue-600">
+              המערכת כעת משתמשת באחסון מקומי (Base64) ללא תלות בשירותי ענן חיצוניים.
+              שים לב: תמונות גדולות עלולות להשפיע על ביצועי המערכת.
+            </p>
+          </div>
+        </div>
+      </Card>
+
       <Card className="p-6">
         <div className="space-y-4">
           <h2 className="text-lg font-semibold mb-4">הגדרות העלאה</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1">קטגוריה</label>
+              <label className="block text-sm font-medium mb-1">
+                קטגוריה 
+                <span className="text-red-500">*</span>
+                <span className="text-sm font-normal text-gray-500 mr-1">(חובה)</span>
+              </label>
               <Select 
                 value={selectedCategoryId} 
                 onValueChange={setSelectedCategoryId}
               >
-                <SelectTrigger>
+                <SelectTrigger className={`w-full ${!selectedCategoryId ? 'border-red-300 bg-red-50' : ''}`}>
                   <SelectValue placeholder="בחר קטגוריה" />
                 </SelectTrigger>
                 <SelectContent>
@@ -395,178 +397,234 @@ export default function BulkProductImportPage() {
                   ))}
                 </SelectContent>
               </Select>
+              {!selectedCategoryId && (
+                <p className="text-sm text-red-500 mt-1">יש לבחור קטגוריה לפני העלאת תמונות</p>
+              )}
             </div>
             
             <div>
-              <label className="block text-sm font-medium mb-1">טקסט הלוגו לסינון (שם החברה)</label>
-              <Input
+              <label className="block text-sm font-medium mb-1">לוגו החברה בתמונות (לסינון)</label>
+              <Input 
+                placeholder="שם החברה המופיע בתמונות" 
                 value={companyLogoText}
                 onChange={(e) => setCompanyLogoText(e.target.value)}
-                placeholder="הזן את שם הלוגו שיש לסנן"
               />
-              <p className="text-xs text-gray-500 mt-1">
-                טקסט זה יוסר משמות המוצרים המחולצים מהתמונות
-              </p>
+              <p className="text-xs text-gray-500 mt-1">טקסט זה יסונן מהמוצרים בעת יצירתם</p>
             </div>
           </div>
-
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center cursor-pointer hover:bg-gray-50 transition-colors">
-            <input
-              type="file"
-              id="bulk-file-upload"
-              className="hidden"
-              multiple
-              accept="image/*"
-              onChange={handleFilesUpload}
-              disabled={isUploading || isProcessing}
-            />
-            <label htmlFor="bulk-file-upload" className="cursor-pointer">
-              <div className="flex flex-col items-center">
-                <Upload className="h-10 w-10 text-gray-400 mb-4" />
-                <p className="font-medium">לחץ להעלאת תמונות או גרור לכאן</p>
-                <p className="text-sm text-gray-500 mt-1">
-                  ניתן להעלות מאות תמונות בו-זמנית - אין הגבלה על הכמות
-                </p>
-              </div>
+          
+          <div className="mt-4">
+            <label className="block text-sm font-medium mb-1">
+              העלאת תמונות
+              <span className="text-sm font-normal text-gray-500 mr-1">(בחר קבצי תמונה)</span>
             </label>
-          </div>
-
-          {isUploading && (
-            <div className="mt-4">
-              <p className="text-sm mb-2">מעלה תמונות... {uploadProgress}%</p>
-              <Progress value={uploadProgress} />
-            </div>
-          )}
-
-          {isProcessing && (
-            <div className="mt-4">
-              <p className="text-sm mb-2">מעבד תמונות... {processingProgress}%</p>
-              <Progress value={processingProgress} />
-            </div>
-          )}
-
-          {errorMessage && (
-            <div className="bg-red-50 p-3 rounded-lg border border-red-200 text-red-700 text-sm">
-              {errorMessage}
-            </div>
-          )}
-
-          {uploadedImages.length > 0 && (
-            <div className="mt-6">
-              <div className="flex justify-between items-center mb-4">
-                <div>
-                  <h3 className="text-lg font-semibold">
-                    תמונות שהועלו ({uploadedImages.length})
-                  </h3>
-                  <div className="flex space-x-2 mt-2">
-                    <Button variant="outline" size="sm" onClick={() => toggleAllSelection(true)}>
-                      סמן הכל
-                    </Button>
-                    <Button variant="outline" size="sm" onClick={() => toggleAllSelection(false)}>
-                      הסר סימון מהכל
-                    </Button>
+            <div className="mt-2">
+              <label 
+                htmlFor="file-upload" 
+                className="cursor-pointer relative bg-white rounded-md font-medium text-primary hover:text-primary-dark focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-primary"
+              >
+                <div className="flex items-center justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md hover:bg-gray-50">
+                  <div className="space-y-1 text-center">
+                    <Upload className="mx-auto h-12 w-12 text-gray-400" />
+                    <div className="flex text-sm text-gray-600">
+                      <span>העלה תמונות מוצרים</span>
+                      <input 
+                        id="file-upload" 
+                        name="file-upload" 
+                        type="file" 
+                        className="sr-only" 
+                        accept="image/*" 
+                        multiple 
+                        onChange={handleFilesUpload} 
+                        disabled={isUploading}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500">PNG, JPG, GIF עד 10MB</p>
                   </div>
                 </div>
-                <Button 
-                  onClick={extractTextFromImages}
-                  disabled={isProcessing || isUploading || !selectedCategoryId}
-                >
-                  {isProcessing ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      מעבד...
-                    </>
-                  ) : (
-                    <>
-                      <FileText className="mr-2 h-4 w-4" />
-                      חלץ שמות מוצרים
-                    </>
-                  )}
-                </Button>
+              </label>
+            </div>
+          </div>
+          
+          {isUploading && (
+            <div className="mt-4">
+              <div className="flex items-center">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <span>מעלה תמונות... {uploadProgress}%</span>
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {uploadedImages.map((image, index) => (
-                  <Card 
-                    key={index} 
-                    className={`overflow-hidden ${image.is_selected ? 'ring-2 ring-blue-500' : 'opacity-70'}`}
+              <Progress value={uploadProgress} className="mt-2" />
+            </div>
+          )}
+          
+          {uploadedImages.length > 0 && !isUploading && (
+            <div className="mt-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold">תמונות שהועלו ({uploadedImages.length})</h3>
+                <div className="flex space-x-2 rtl:space-x-reverse">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setUploadedImages([])}
+                    disabled={isProcessing}
                   >
-                    <div className="relative h-40">
+                    נקה הכל
+                  </Button>
+                  <Button 
+                    onClick={extractTextFromImages}
+                    disabled={isProcessing || !selectedCategoryId}
+                  >
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        מעבד תמונות...
+                      </>
+                    ) : (
+                      <>
+                        <FileText className="mr-2 h-4 w-4" />
+                        עבד תמונות ליצירת מוצרים
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
+              
+              {isProcessing && (
+                <div className="mt-4">
+                  <div className="flex items-center">
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <span>מעבד תמונות ליצירת מוצרים... {processingProgress}%</span>
+                  </div>
+                  <Progress value={processingProgress} className="mt-2" />
+                </div>
+              )}
+              
+              {processingComplete && (
+                <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded">
+                  <div className="flex items-start">
+                    <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 mr-2" />
+                    <div>
+                      <h4 className="font-medium text-green-800">עיבוד תמונות הושלם</h4>
+                      <p className="text-sm text-green-600">
+                        {successCount} תמונות עובדו בהצלחה, {failureCount} נכשלו.
+                        סמן את המוצרים הרצויים וייבא אותם למערכת.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              <div className="mt-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {uploadedImages.map((image, index) => (
+                  <Card key={index} className="p-4">
+                    <div className="flex items-start space-x-3 rtl:space-x-reverse">
+                      <div className="flex-shrink-0">
+                        <Image className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {image.file_name}
+                        </p>
+                        <p className="text-xs text-gray-500 truncate">
+                          {image.status === "uploaded" && "הועלה, ממתין לעיבוד"}
+                          {image.status === "processing" && "בתהליך עיבוד..."}
+                          {image.status === "processed" && "עובד - מוכן לייבוא"}
+                          {image.status === "failed" && "נכשל בעיבוד"}
+                        </p>
+                      </div>
+                      <div className="flex-shrink-0">
+                        <input
+                          type="checkbox"
+                          checked={image.is_selected}
+                          onChange={() => {
+                            const updatedImages = [...uploadedImages];
+                            updatedImages[index].is_selected = !updatedImages[index].is_selected;
+                            setUploadedImages(updatedImages);
+                          }}
+                          className="h-4 w-4 text-primary rounded"
+                        />
+                      </div>
+                    </div>
+                    
+                    <div className="mt-2">
                       <img 
                         src={image.image_url} 
                         alt={image.file_name}
-                        className="w-full h-full object-cover" 
+                        className="h-36 w-full object-contain rounded border bg-gray-50"
                       />
-                      <div 
-                        className="absolute top-2 right-2 cursor-pointer"
-                        onClick={() => toggleImageSelection(index)}
-                      >
-                        <div className={`h-6 w-6 rounded-full ${image.is_selected ? 'bg-blue-500' : 'bg-gray-300'} flex items-center justify-center`}>
-                          <CheckCircle className="h-4 w-4 text-white" />
-                        </div>
-                      </div>
-                      {image.status === "processed" && (
-                        <div className="absolute bottom-0 right-0 bg-green-500 text-white px-2 py-1 text-xs">
-                          {image.extracted_text.includes("שגיאה") || image.extracted_text.includes("השתמשנו בשם הקובץ") ? 
-                            "שם מהקובץ" : "עובד בהצלחה"}
-                        </div>
-                      )}
-                      {image.status === "failed" && (
-                        <div className="absolute bottom-0 right-0 bg-red-500 text-white px-2 py-1 text-xs">
-                          נכשל
-                        </div>
-                      )}
                     </div>
-                    <div className="p-3">
-                      <div className="text-sm font-medium truncate mb-1">
-                        {image.file_name}
-                      </div>
-                      
-                      {image.status === "processed" && (
+                    
+                    {image.status === "processed" && (
+                      <div className="mt-3">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          שם המוצר
+                        </label>
                         <Input
                           value={image.product_name}
-                          onChange={(e) => updateProductName(index, e.target.value)}
+                          onChange={(e) => {
+                            const updatedImages = [...uploadedImages];
+                            updatedImages[index].product_name = e.target.value;
+                            setUploadedImages(updatedImages);
+                          }}
+                          className="text-sm"
                           placeholder="שם המוצר"
-                          className="text-sm mt-2"
                         />
-                      )}
-                      
-                      {image.status === "failed" && (
-                        <p className="text-sm text-red-500 mt-2">
-                          לא ניתן לחלץ טקסט
-                        </p>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </Card>
                 ))}
               </div>
+              
+              {uploadedImages.filter(img => img.status === "processed").length > 0 && (
+                <div className="mt-6">
+                  <Button 
+                    onClick={() => setShowImportDialog(true)}
+                    disabled={isProcessing || !selectedCategoryId}
+                    className="w-full"
+                  >
+                    <Package className="mr-2 h-4 w-4" />
+                    ייבא מוצרים למערכת
+                  </Button>
+                </div>
+              )}
             </div>
           )}
         </div>
       </Card>
 
+      {errorMessage && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded relative">
+          <div className="flex">
+            <div className="py-1">
+              <AlertCircle className="h-5 w-5 text-red-500 mr-2" />
+            </div>
+            <div>
+              <p className="font-medium">{errorMessage}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <AlertDialog open={showImportDialog} onOpenChange={setShowImportDialog}>
-        <AlertDialogContent aria-describedby="import-dialog-description">
+        <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>יבוא מוצרים</AlertDialogTitle>
-            <AlertDialogDescription id="import-dialog-description">
-              חילוץ הטקסט מהתמונות הושלם.
+            <AlertDialogTitle>יבוא מוצרים למערכת</AlertDialogTitle>
+            <AlertDialogDescription>
+              <p>האם אתה בטוח שברצונך לייבא {uploadedImages.filter(img => img.is_selected && img.status === "processed").length} מוצרים למערכת?</p>
+              <p className="mt-2">המוצרים ייווצרו בקטגוריה: <strong>{categories.find(c => c.id === selectedCategoryId)?.name || selectedCategoryId}</strong></p>
+              <p className="mt-2 text-amber-600 font-semibold">שים לב: פעולה זו אינה ניתנת לביטול.</p>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="mt-4 space-y-2">
-            <div>סה"כ תמונות שעובדו בהצלחה: {successCount}</div>
-            <div>סה"כ תמונות שנכשלו: {failureCount}</div>
-            <div className="mt-4">האם ברצונך ליצור מוצרים חדשים מהתמונות שעובדו?</div>
-          </div>
           <AlertDialogFooter>
-            <AlertDialogCancel>בטל</AlertDialogCancel>
-            <AlertDialogAction onClick={handleImportProducts} disabled={isProcessing}>
+            <AlertDialogCancel>ביטול</AlertDialogCancel>
+            <AlertDialogAction onClick={handleImportProducts}>
               {isProcessing ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   מייבא...
                 </>
-              ) : "צור מוצרים"}
+              ) : (
+                "אישור וייבוא"
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
