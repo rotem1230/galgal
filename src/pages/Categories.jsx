@@ -442,7 +442,7 @@ export default function CategoriesPage() {
                     <img 
                       src={category.image_url} 
                       alt={category.name}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-contain"
                       onError={(e) => {
                         e.target.style.display = 'none';
                         e.target.parentNode.style.backgroundColor = '#3b82f6';
@@ -530,7 +530,7 @@ export default function CategoriesPage() {
                         <img 
                           src={product.image_url} 
                           alt={product.name}
-                          className="w-full h-full object-cover"
+                          className="w-full h-full object-contain"
                         />
                       ) : (
                         <div className="w-full h-full bg-gray-100 flex items-center justify-center">
@@ -586,7 +586,7 @@ export default function CategoriesPage() {
                   <img
                     src={newCategory.image_url}
                     alt="תצוגה מקדימה"
-                    className="w-full h-40 object-cover rounded"
+                    className="w-full h-40 object-contain rounded"
                   />
                 )}
                 {editingCategory && (
