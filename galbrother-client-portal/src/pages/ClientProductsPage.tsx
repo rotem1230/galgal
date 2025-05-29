@@ -181,8 +181,8 @@ const ClientProductsPage: React.FC = () => {
   const isValidImageUrl = (url: string | undefined): boolean => {
     if (!url) return false;
     if (url.trim() === '') return false;
-    // בדיקה בסיסית שזה URL תקין
-    return url.startsWith('http://') || url.startsWith('https://');
+    // בדיקה שזה URL תקין או תמונת Base64
+    return url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:image/');
   };
 
   return (
