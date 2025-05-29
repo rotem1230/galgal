@@ -187,12 +187,21 @@ export default function CategoriesPage() {
 
     setIsUploading(true);
     try {
-      const { file_url } = await UploadFile({ file });
-      setNewCategory({ ...newCategory, image_url: file_url });
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result;
+        setNewCategory({ ...newCategory, image_url: base64String });
+        setIsUploading(false);
+      };
+      reader.onerror = (error) => {
+        console.error("שגיאה בקריאת הקובץ:", error);
+        setGenerationError(`שגיאה בהעלאת קובץ: ${error.message || 'שגיאה לא ידועה'}`);
+        setIsUploading(false);
+      };
+      reader.readAsDataURL(file);
     } catch (error) {
-      console.error("Error uploading file:", error);
-      setGenerationError(`שגיאה בהעלאת קובץ: ${error.message}`);
-    } finally {
+      console.error("שגיאה בהעלאת קובץ:", error);
+      setGenerationError(`שגיאה בהעלאת קובץ: ${error.message || 'שגיאה לא ידועה'}`);
       setIsUploading(false);
     }
   };

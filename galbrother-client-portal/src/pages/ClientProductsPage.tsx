@@ -59,15 +59,17 @@ const ClientProductsPage: React.FC = () => {
         
         // טעינת מוצרים
         const productsCollectionRef = collection(db, 'products'); 
-        let productsQuery = query(productsCollectionRef, orderBy("name"));
+        let productsQuery;
         
-        // אם יש קטגוריה נבחרת, סנן לפיה
+        // אם יש קטגוריה נבחרת, סנן לפיה בלי orderBy
         if (selectedCategoryId) {
           productsQuery = query(
             productsCollectionRef, 
-            where('category_id', '==', selectedCategoryId),
-            orderBy("name")
+            where('category_id', '==', selectedCategoryId)
           );
+        } else {
+          // אם אין סינון, אפשר להשתמש ב-orderBy
+          productsQuery = query(productsCollectionRef, orderBy("name"));
         }
         
         const querySnapshot = await getDocs(productsQuery);
@@ -76,6 +78,11 @@ const ClientProductsPage: React.FC = () => {
           id: doc.id,
           ...doc.data()
         })) as Product[]; 
+        
+        // מיון בצד הלקוח אם יש סינון לפי קטגוריה
+        if (selectedCategoryId) {
+          productsData.sort((a, b) => a.name.localeCompare(b.name));
+        }
         
         console.log("Products fetched:", productsData);
         setProducts(productsData);

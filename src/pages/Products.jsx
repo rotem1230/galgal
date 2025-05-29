@@ -252,12 +252,21 @@ export default function ProductsPage() {
 
     setIsUploading(true);
     try {
-      const { file_url } = await UploadFile({ file });
-      setNewProduct({ ...newProduct, image_url: file_url });
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result;
+        setNewProduct({ ...newProduct, image_url: base64String });
+        setIsUploading(false);
+      };
+      reader.onerror = (error) => {
+        console.error("שגיאה בקריאת הקובץ:", error);
+        setIsUploading(false);
+      };
+      reader.readAsDataURL(file);
     } catch (error) {
-      console.error("Error uploading file:", error);
+      console.error("שגיאה בהעלאת קובץ:", error);
+      setIsUploading(false);
     }
-    setIsUploading(false);
   };
 
   const handlePriceChange = (priceWithVAT) => {
