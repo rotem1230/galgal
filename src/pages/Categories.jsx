@@ -28,6 +28,7 @@ export default function CategoriesPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [isCategoryProductsOpen, setIsCategoryProductsOpen] = useState(false);
   const [isGeneratingImages, setIsGeneratingImages] = useState(false);
   const [currentGeneratingCategory, setCurrentGeneratingCategory] = useState("");
   const [generationError, setGenerationError] = useState("");
@@ -340,6 +341,11 @@ export default function CategoriesPage() {
     }
   };
 
+  const handleCategoryClick = (category) => {
+    setSelectedCategory(category);
+    setIsCategoryProductsOpen(true);
+  };
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
@@ -436,7 +442,7 @@ export default function CategoriesPage() {
                 </div>
                 <div 
                   className="aspect-video relative cursor-pointer"
-                  onClick={() => setSelectedCategory(selectedCategory?.id === category.id ? null : category)}
+                  onClick={() => handleCategoryClick(category)}
                 >
                   {category.image_url ? (
                     <img 
@@ -512,48 +518,58 @@ export default function CategoriesPage() {
             ))}
           </div>
 
-          {selectedCategory && (
-            <div className="mt-8">
-              <div className="flex items-center justify-between mb-6">
-                <h2 className="text-xl font-bold">
-                  מוצרים בקטגוריית {selectedCategory.name}
-                </h2>
-                <Button variant="outline" onClick={() => setSelectedCategory(null)}>
+          <Dialog open={isCategoryProductsOpen} onOpenChange={setIsCategoryProductsOpen}>
+            <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>
+                  מוצרים בקטגוריית {selectedCategory?.name}
+                </DialogTitle>
+              </DialogHeader>
+              {selectedCategory && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {getCategoryProducts(selectedCategory.id).length > 0 ? (
+                    getCategoryProducts(selectedCategory.id).map((product) => (
+                      <Card key={product.id} className="overflow-hidden">
+                        <div className="aspect-square relative">
+                          {product.image_url ? (
+                            <img 
+                              src={product.image_url} 
+                              alt={product.name}
+                              className="w-full h-full object-contain"
+                            />
+                          ) : (
+                            <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                              <Package className="w-12 h-12 text-gray-400" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="p-4">
+                          <h3 className="font-bold">{product.name}</h3>
+                          <p className="mt-2 font-medium">
+                            ₪{product.price_with_vat} כולל מע"מ
+                          </p>
+                          {product.variations?.length > 0 && (
+                            <p className="text-sm text-gray-500 mt-1">
+                              {product.variations.length} וריאציות
+                            </p>
+                          )}
+                        </div>
+                      </Card>
+                    ))
+                  ) : (
+                    <div className="col-span-full text-center py-4">
+                      אין מוצרים בקטגוריה זו
+                    </div>
+                  )}
+                </div>
+              )}
+              <DialogFooter>
+                <Button onClick={() => setIsCategoryProductsOpen(false)}>
                   סגור
                 </Button>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                {getCategoryProducts(selectedCategory.id).map((product) => (
-                  <Card key={product.id} className="overflow-hidden">
-                    <div className="aspect-square relative">
-                      {product.image_url ? (
-                        <img 
-                          src={product.image_url} 
-                          alt={product.name}
-                          className="w-full h-full object-contain"
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-gray-100 flex items-center justify-center">
-                          <Package className="w-12 h-12 text-gray-400" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="p-4">
-                      <h3 className="font-bold">{product.name}</h3>
-                      <p className="mt-2 font-medium">
-                        ₪{product.price_with_vat} כולל מע"מ
-                      </p>
-                      {product.variations?.length > 0 && (
-                        <p className="text-sm text-gray-500 mt-1">
-                          {product.variations.length} וריאציות
-                        </p>
-                      )}
-                    </div>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          )}
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
           <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
             <DialogContent>
