@@ -299,49 +299,47 @@ const ClientProductsPage: React.FC = () => {
         // שימוש ב-grid להצגה יפה יותר עם גבהים קבועים לכל המרכיבים
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {filteredProducts.map(product => (
-            // כרטיס מוצר עם גובה קבוע מוחלט
-            <div key={product.id} className="border rounded-lg shadow-md overflow-hidden bg-white flex flex-col" style={{ height: '480px' }}>
-              {/* קונטיינר תמונה עם גובה קבוע מוחלט */}
-              <div className="w-full overflow-hidden bg-gray-100 flex items-center justify-center" style={{ height: '220px', minHeight: '220px', maxHeight: '220px' }}>
+            // כרטיס מוצר עם תכונות גמישות יותר
+            <div key={product.id} className="border rounded-lg shadow-md overflow-hidden bg-white flex flex-col">
+              {/* קונטיינר תמונה עם תכונות גמישות יותר */}
+              <div className="w-full aspect-square overflow-hidden bg-gray-100 flex items-center justify-center p-4">
                 {isValidImageUrl(product.image_url) ? (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <img 
-                      src={product.image_url} 
-                      alt={product.name} 
-                      className="max-w-full max-h-full object-contain" 
-                      onError={(e) => { 
-                        // כאשר יש שגיאה בטעינת התמונה, אנחנו:
-                        // 1. מונעים ניסיונות טעינה מחדש על ידי ריקון מקור התמונה
-                        // 2. מחליפים לתמונת placeholder קבועה
-                        const target = e.target as HTMLImageElement;
-                        // הוספת בדיקה שהתמונה לא כבר שונתה לתמונת placeholder כדי למנוע לולאה אינסופית
-                        if (!target.src.includes('placeholder')) {
-                          target.src = 'https://via.placeholder.com/300x200?text=No+Image';
-                          target.onerror = null; // מבטל את אירוע השגיאה למניעת לולאה אינסופית
-                        }
-                      }}
-                    />
-                  </div>
+                  <img 
+                    src={product.image_url} 
+                    alt={product.name} 
+                    className="w-full h-full object-contain" 
+                    onError={(e) => { 
+                      // כאשר יש שגיאה בטעינת התמונה, אנחנו:
+                      // 1. מונעים ניסיונות טעינה מחדש על ידי ריקון מקור התמונה
+                      // 2. מחליפים לתמונת placeholder קבועה
+                      const target = e.target as HTMLImageElement;
+                      // הוספת בדיקה שהתמונה לא כבר שונתה לתמונת placeholder כדי למנוע לולאה אינסופית
+                      if (!target.src.includes('placeholder')) {
+                        target.src = 'https://via.placeholder.com/300x200?text=No+Image';
+                        target.onerror = null; // מבטל את אירוע השגיאה למניעת לולאה אינסופית
+                      }
+                    }}
+                  />
                 ) : (
                   // תצוגת placeholder קבועה למוצרים ללא תמונה
                   <div className="flex flex-col items-center justify-center w-full h-full">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-16 w-16 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-20 w-20 text-gray-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
                     </svg>
-                    <span className="text-gray-500 mt-2 text-center px-2 line-clamp-1">{product.name}</span>
+                    <span className="text-gray-500 mt-2 text-center px-2">{product.name}</span>
                   </div>
                 )}
               </div>
               
-              {/* אזור תוכן עם גבהים וריווחים קבועים */}
+              {/* אזור תוכן עם גמישות רבה יותר */}
               <div className="p-4 flex flex-col flex-1">
-                {/* כותרת עם גובה קבוע */}
-                <div className="mb-2" style={{ height: '48px', minHeight: '48px', maxHeight: '48px' }}>
+                {/* כותרת */}
+                <div className="mb-2">
                   <h3 className="text-lg font-semibold line-clamp-2 overflow-hidden">{product.name}</h3>
                 </div>
                 
                 {/* מחיר המוצר */}
-                <div className="mb-2" style={{ height: '24px', minHeight: '24px', maxHeight: '24px' }}>
+                <div className="mb-4">
                   {getProductPrice(product) ? (
                     <p className="text-md font-medium text-blue-700">{getProductPrice(product)?.toFixed(2)} ₪</p>
                   ) : (
@@ -350,10 +348,10 @@ const ClientProductsPage: React.FC = () => {
                 </div>
                 
                 {/* מרווח גמיש */}
-                <div className="flex-grow min-h-[30px]"></div>
+                <div className="flex-grow"></div>
                 
-                {/* אזור הכפתורים - גובה קבוע */}
-                <div className="" style={{ height: '100px', minHeight: '100px', maxHeight: '100px' }}>
+                {/* אזור הכפתורים */}
+                <div className="mt-4">
                   {/* בורר כמות */}
                   {canAddToCart(product) && (
                     <div className="flex items-center justify-between mb-4">
