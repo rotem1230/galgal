@@ -1,5 +1,13 @@
 import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
-import { User, onAuthStateChanged, signOut } from 'firebase/auth';
+import { 
+  User, 
+  onAuthStateChanged, 
+  signOut, 
+  signInWithEmailAndPassword,
+  setPersistence,
+  browserLocalPersistence,
+  browserSessionPersistence
+} from 'firebase/auth';
 import { auth } from '../../firebase-config'; // ודא שהנתיב נכון
 
 // הגדרת טיפוסים (ניתן להרחיב בהמשך)
@@ -7,11 +15,12 @@ interface AuthContextType {
   currentUser: User | null;
   isAuthenticated: boolean;
   loading: boolean; // נוסף כדי לדעת מתי האימות נטען
+  login: (email: string, password: string, rememberMe: boolean) => Promise<void>;
   logout: () => Promise<void>;
 }
 
 // יצירת הקונטקסט עם ערך ברירת מחדל
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType | null>(null);
 
 // יצירת ה-Provider
 interface ClientAuthProviderProps {
@@ -50,16 +59,34 @@ export const ClientAuthProvider: React.FC<ClientAuthProviderProps> = ({ children
     checkPathAndRedirect();
   }, [currentUser, loading]);
 
+  const login = async (email: string, password: string, rememberMe: boolean) => {
+    try {
+      console.log(`ניסיון התחברות עם אימייל: ${email}, זכור אותי: ${rememberMe}`);
+      
+      // קביעת סוג ה-persistence לפי בחירת המשתמש
+      const persistence = rememberMe ? browserLocalPersistence : browserSessionPersistence;
+      await setPersistence(auth, persistence);
+      console.log(`נקבע persistence: ${rememberMe ? 'local' : 'session'}`);
+      
+      await signInWithEmailAndPassword(auth, email, password);
+      console.log('התחברות הצליחה');
+    } catch (error) {
+      console.error('שגיאה בהתחברות:', error);
+      throw error;
+    }
+  };
+
   const logout = async () => {
     try {
       await signOut(auth);
-      console.log("Logged out successfully");
+      console.log("התנתקות הצליחה");
       // המצב ישתנה אוטומטית בזכות onAuthStateChanged
       
       // ניתוב ידני לדף ההתחברות של הלקוחות
       window.location.href = '/login-client';
     } catch (error) {
-      console.error("Logout failed:", error);
+      console.error("שגיאה בהתנתקות:", error);
+      throw error;
     }
   };
 
@@ -74,7 +101,7 @@ export const ClientAuthProvider: React.FC<ClientAuthProviderProps> = ({ children
   }
 
   return (
-    <AuthContext.Provider value={{ currentUser, isAuthenticated, loading, logout }}>
+    <AuthContext.Provider value={{ currentUser, isAuthenticated, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
@@ -83,7 +110,7 @@ export const ClientAuthProvider: React.FC<ClientAuthProviderProps> = ({ children
 // Hook לשימוש בקונטקסט
 export const useClientAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error('useClientAuth must be used within a ClientAuthProvider');
   }
   return context;

@@ -52,7 +52,7 @@ export default function ProductsPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [deleteError, setDeleteError] = useState("");
+  const [deleteError, setDeleteError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedProducts, setSelectedProducts] = useState(new Set());
   const [isBulkEditing, setIsBulkEditing] = useState(false);
@@ -61,11 +61,6 @@ export default function ProductsPage() {
     price_with_vat: "",
     price_before_vat: ""
   });
-  const [isImportOpen, setIsImportOpen] = useState(false);
-  const [importStatus, setImportStatus] = useState({ total: 0, added: 0, skipped: 0, categoryMismatch: 0, inProgress: false });
-  const [csvFile, setCsvFile] = useState(null);
-  const [isDeleteAllOpen, setIsDeleteAllOpen] = useState(false);
-  const [isDeletingAll, setIsDeletingAll] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -405,13 +400,6 @@ export default function ProductsPage() {
     }
   };
 
-  const handleCsvFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setCsvFile(file);
-    }
-  };
-
   const processProductVariations = (product) => {
     const variations = [];
     
@@ -475,171 +463,6 @@ export default function ProductsPage() {
     return variations;
   };
 
-  const deleteAllProducts = async () => {
-    setIsDeletingAll(true);
-    try {
-      // קבל את כל המוצרים
-      const productsData = await Product.list();
-      
-      // מחק כל מוצר ברשימה
-      for (const product of productsData) {
-        await Product.delete(product.id);
-      }
-      
-      // רענן את הדף
-      await loadData();
-      
-      // סגור את דיאלוג האישור
-      setIsDeleteAllOpen(false);
-    } catch (error) {
-      console.error("שגיאה במחיקת כל המוצרים:", error);
-      setDeleteError(`שגיאה במחיקת כל המוצרים: ${error.message}`);
-    } finally {
-      setIsDeletingAll(false);
-    }
-  };
-
-  const importProductsFromCsv = async () => {
-    if (!csvFile) {
-      setDeleteError('בחר קובץ CSV תחילה');
-      return;
-    }
-
-    setImportStatus(prev => ({ ...prev, inProgress: true }));
-    setDeleteError('');
-
-    try {
-      // קרא את תוכן הקובץ
-      const fileReader = new FileReader();
-      fileReader.onload = async (event) => {
-        const csvText = event.target.result;
-        
-        // פרסר את תוכן ה-CSV
-        const { data, errors } = parse(csvText, {
-          header: true,
-          skipEmptyLines: true
-        });
-
-        if (errors.length > 0) {
-          setDeleteError(`שגיאה בפענוח הקובץ: ${errors[0].message}`);
-          setImportStatus(prev => ({ ...prev, inProgress: false }));
-          return;
-        }
-
-        // קבל את המוצרים הקיימים
-        const existingProductsSnapshot = await Product.list();
-        const existingProductsMap = new Map();
-        
-        existingProductsSnapshot.forEach(product => {
-          existingProductsMap.set(product.name, product);
-        });
-        
-        // קבל את הקטגוריות הקיימות לצורך מיפוי שמות לID
-        const categoriesSnapshot = await Category.list();
-        const categoriesMap = new Map();
-        
-        categoriesSnapshot.forEach(category => {
-          categoriesMap.set(category.name, category.id);
-        });
-        
-        let addedCount = 0;
-        let skippedCount = 0;
-        let categoryMismatchCount = 0;
-        
-        // עבור על כל המוצרים בקובץ
-        for (const productData of data) {
-          // וודא שיש שם למוצר
-          if (!productData.name) {
-            skippedCount++;
-            continue;
-          }
-          
-          // מוצר קיים כבר?
-          const existingProduct = existingProductsMap.get(productData.name);
-          
-          // טיפול בקטגוריה - תן עדיפות ל-ID אם קיים, אחרת חפש לפי שם
-          let categoryId = null;
-          
-          // אם יש category_id ישיר
-          if (productData.category_id) {
-            // בדוק אם ה-ID קיים במערכת
-            const categoryExists = Array.from(categoriesMap.values()).includes(productData.category_id);
-            if (categoryExists) {
-              categoryId = productData.category_id;
-            } else {
-              console.log(`אזהרה: קטגוריה עם ID '${productData.category_id}' למוצר '${productData.name}' לא נמצאה`);
-              categoryMismatchCount++;
-            }
-          } 
-          // אם אין ID תקף אבל יש שם קטגוריה, נסה למצוא לפי שם
-          else if (productData.category_name) {
-            categoryId = categoriesMap.get(productData.category_name);
-            if (!categoryId) {
-              console.log(`אזהרה: קטגוריה '${productData.category_name}' למוצר '${productData.name}' לא נמצאה`);
-              categoryMismatchCount++;
-            }
-          }
-          // תמיכה לאחורה בפורמט הישן שהשתמש ב-'category' 
-          else if (productData.category) {
-            categoryId = categoriesMap.get(productData.category);
-            if (!categoryId) {
-              console.log(`אזהרה: קטגוריה '${productData.category}' למוצר '${productData.name}' לא נמצאה`);
-              categoryMismatchCount++;
-            }
-          }
-          
-          // טיפול בוריאציות
-          const variations = processProductVariations(productData);
-          
-          // הכן את אובייקט המוצר לשמירה
-          const productToSave = {
-            name: productData.name,
-            category_id: categoryId,
-            image_url: productData.image_url || '',
-            price_before_vat: parseFloat(productData.price_before_vat) || 0,
-            price_with_vat: parseFloat(productData.price_with_vat) || 0,
-            variations: variations
-          };
-          
-          if (existingProduct) {
-            skippedCount++;
-          } else {
-            // הוסף מוצר חדש
-            await Product.create(productToSave);
-            addedCount++;
-          }
-        }
-        
-        // עדכן את מצב הייבוא
-        setImportStatus({
-          total: data.length,
-          added: addedCount,
-          skipped: skippedCount,
-          categoryMismatch: categoryMismatchCount,
-          inProgress: false
-        });
-        
-        // רענן את הנתונים
-        await loadData();
-        
-        // סגור את החלון לאחר 3 שניות אם הייבוא הצליח
-        setTimeout(() => {
-          if (addedCount > 0) {
-            setIsImportOpen(false);
-          }
-        }, 3000);
-        
-      };
-      
-      fileReader.readAsText(csvFile);
-      
-    } catch (error) {
-      console.error("שגיאה בייבוא מוצרים:", error);
-      setDeleteError(`שגיאה בייבוא מוצרים: ${error.message}`);
-      setImportStatus(prev => ({ ...prev, inProgress: false }));
-    }
-  };
-
   // סינון המוצרים לפי קטגוריה וחיפוש
   const filteredProducts = products
     .filter(p => selectedCategory === "all" || p.category_id === selectedCategory)
@@ -664,14 +487,6 @@ export default function ProductsPage() {
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold">מוצרים</h1>
           <div className="flex gap-2">
-            <Button 
-              variant="destructive" 
-              onClick={() => setIsDeleteAllOpen(true)}
-              title="מחק את כל המוצרים"
-            >
-              <AlertTriangle className="w-4 h-4 ml-2" />
-              מחק הכל
-            </Button>
             {selectedProducts.size > 0 && (
               <Button 
                 variant="outline"
@@ -682,10 +497,6 @@ export default function ProductsPage() {
                 ערוך {selectedProducts.size} מוצרים
               </Button>
             )}
-            <Button onClick={() => setIsImportOpen(true)} variant="outline">
-              <Upload className="w-4 h-4 ml-2" />
-              ייבוא מוצרים
-            </Button>
             <Button onClick={() => setIsAddOpen(true)}>
               <Plus className="w-4 h-4 ml-2" />
               מוצר חדש
@@ -1009,87 +820,6 @@ export default function ProductsPage() {
                 disabled={!bulkEditData.category_id && !bulkEditData.price_with_vat}
               >
                 עדכן מוצרים
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        {/* דיאלוג אישור מחיקת כל המוצרים */}
-        <AlertDialog open={isDeleteAllOpen} onOpenChange={setIsDeleteAllOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>האם אתה בטוח שברצונך למחוק את כל המוצרים?</AlertDialogTitle>
-              <AlertDialogDescription>
-                פעולה זו תמחק את כל המוצרים במערכת ואינה ניתנת לביטול.
-                מומלץ לגבות את הנתונים לפני ביצוע פעולה זו.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>ביטול</AlertDialogCancel>
-              <AlertDialogAction 
-                onClick={deleteAllProducts} 
-                className="bg-red-500 hover:bg-red-600"
-                disabled={isDeletingAll}
-              >
-                {isDeletingAll ? (
-                  <div className="flex items-center">
-                    <div className="animate-spin h-4 w-4 border-2 border-b-transparent rounded-full ml-2"></div>
-                    מוחק...
-                  </div>
-                ) : "מחק את כל המוצרים"}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-
-        <Dialog open={isImportOpen} onOpenChange={setIsImportOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>ייבוא מוצרים מקובץ CSV</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">קובץ CSV</label>
-                <Input 
-                  type="file" 
-                  accept=".csv" 
-                  onChange={handleCsvFileChange}
-                  disabled={importStatus.inProgress}
-                />
-                <p className="text-sm text-gray-500 mt-2">
-                  הקובץ צריך להכיל את העמודות: name, category_id, category_name, image_url, price_before_vat, price_with_vat, variations
-                </p>
-              </div>
-              
-              {deleteError && (
-                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-                  {deleteError}
-                </div>
-              )}
-              
-              {!importStatus.inProgress && importStatus.total > 0 && (
-                <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
-                  <p>הייבוא הושלם בהצלחה!</p>
-                  <p>סה"כ: {importStatus.total}</p>
-                  <p>נוספו: {importStatus.added}</p>
-                  <p>דולגו: {importStatus.skipped}</p>
-                  {importStatus.categoryMismatch > 0 && (
-                    <p>שגיאות קטגוריה: {importStatus.categoryMismatch}</p>
-                  )}
-                </div>
-              )}
-            </div>
-            <DialogFooter>
-              <Button
-                onClick={importProductsFromCsv}
-                disabled={!csvFile || importStatus.inProgress}
-              >
-                {importStatus.inProgress ? (
-                  <div className="flex items-center">
-                    <div className="animate-spin h-4 w-4 border-2 border-b-transparent rounded-full ml-2"></div>
-                    מייבא...
-                  </div>
-                ) : "התחל ייבוא"}
               </Button>
             </DialogFooter>
           </DialogContent>

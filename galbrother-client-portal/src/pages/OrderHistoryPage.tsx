@@ -534,7 +534,7 @@ const OrderHistoryPage: React.FC = () => {
           </div>
           
           <div class="footer">
-            <p>האחים גל | טלפון: 03-1234567 | כתובת: רחוב הדוגמה 123, תל אביב</p>
+            <p>האחים גל</p>
             <p>תודה שקנית אצלנו!</p>
           </div>
         </div>

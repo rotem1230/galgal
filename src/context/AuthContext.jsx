@@ -55,9 +55,12 @@ export const AuthProvider = ({ children }) => {
   // פונקציית התחברות באמצעות Firebase עם טיפול ב-rememberMe
   const login = async (email, password, rememberMe) => {
     try {
-      console.log(`ניסיון התחברות עם אימייל: ${email}`);
+      console.log(`ניסיון התחברות עם אימייל: ${email}, זכור אותי: ${rememberMe}`);
+      
+      // קביעת סוג ה-persistence לפי בחירת המשתמש
       const persistence = rememberMe ? browserLocalPersistence : browserSessionPersistence;
       await setPersistence(auth, persistence);
+      console.log(`נקבע persistence: ${rememberMe ? 'local' : 'session'}`);
       
       const result = await signInWithEmailAndPassword(auth, email, password);
       console.log(`התחברות לפיירבייס הצליחה עבור: ${email}`);

@@ -678,7 +678,7 @@ export default function OrdersPage() {
           </div>
           
           <div class="footer">
-            <p>האחים גל | טלפון: 03-1234567 | כתובת: רחוב הדוגמה 123, תל אביב</p>
+            <p>האחים גל</p>
           </div>
         </div>
       </body>
@@ -915,7 +915,7 @@ export default function OrdersPage() {
           </table>
           
           <div class="footer">
-            <p>האחים גל | טלפון: 03-1234567 | כתובת: רחוב הדוגמה 123, תל אביב</p>
+            <p>האחים גל</p>
             <p>תודה שקנית אצלנו!</p>
           </div>
         </div>

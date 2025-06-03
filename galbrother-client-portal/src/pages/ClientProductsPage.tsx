@@ -43,6 +43,11 @@ const ClientProductsPage: React.FC = () => {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  
+  // מצבים חדשים עבור וריאציות והודעות
+  const [selectedVariations, setSelectedVariations] = useState<Record<string, string>>({});
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -136,18 +141,31 @@ const ClientProductsPage: React.FC = () => {
   const handleAddToCart = (product: Product) => {
     const quantity = quantities[product.id] || 1;
     
-    // אם יש וריאציות, משתמשים בווריאציה הראשונה
+    // אם יש וריאציות, משתמשים בווריאציה שנבחרה
     if (product.variations && product.variations.length > 0) {
-      const firstVariation = product.variations[0];
+      const selectedVariationName = selectedVariations[product.id] || product.variations[0].name;
+      const selectedVariation = product.variations.find(v => v.name === selectedVariationName);
+      
+      if (!selectedVariation) {
+        console.warn(`Selected variation ${selectedVariationName} not found for ${product.name}`);
+        return;
+      }
+      
       addToCart({
         productId: product.id,
         productName: product.name,
-        variationName: firstVariation.name,
-        priceWithVat: firstVariation.price_with_vat,
+        variationName: selectedVariation.name,
+        priceWithVat: selectedVariation.price_with_vat,
         imageUrl: product.image_url,
-        quantity: quantity // מעבירים את הכמות שנבחרה
+        quantity: quantity
       });
-      console.log(`Added ${quantity} units of ${product.name} (${firstVariation.name}) to cart.`);
+      
+      // הצגת הודעת הצלחה
+      setSuccessMessage(`${product.name} (${selectedVariation.name}) נוסף לסל בהצלחה!`);
+      setShowSuccessMessage(true);
+      setTimeout(() => setShowSuccessMessage(false), 3000);
+      
+      console.log(`Added ${quantity} units of ${product.name} (${selectedVariation.name}) to cart.`);
     } 
     // אם אין וריאציות, משתמשים במחיר הבסיסי של המוצר
     else if (product.price_with_vat) {
@@ -156,8 +174,14 @@ const ClientProductsPage: React.FC = () => {
         productName: product.name,
         priceWithVat: product.price_with_vat,
         imageUrl: product.image_url,
-        quantity: quantity // מעבירים את הכמות שנבחרה
+        quantity: quantity
       });
+      
+      // הצגת הודעת הצלחה
+      setSuccessMessage(`${product.name} נוסף לסל בהצלחה!`);
+      setShowSuccessMessage(true);
+      setTimeout(() => setShowSuccessMessage(false), 3000);
+      
       console.log(`Added ${quantity} units of ${product.name} to cart.`);
     } else {
       console.warn(`Product ${product.name} has no price information.`);
@@ -169,16 +193,26 @@ const ClientProductsPage: React.FC = () => {
 
   // פונקציה לבדיקה האם אפשר להוסיף מוצר לסל
   const canAddToCart = (product: Product): boolean => {
-    // אפשר להוסיף אם יש וריאציות או מחיר בסיסי
-    return (
-      (product.variations && product.variations.length > 0) ||
-      (product.price_with_vat !== undefined && product.price_with_vat > 0)
-    );
+    // אם יש וריאציות, בדוק שהן קיימות וכוללות מחיר
+    if (product.variations && product.variations.length > 0) {
+      return product.variations.some(v => v.price_with_vat > 0);
+    }
+    // אם אין וריאציות, בדוק שיש מחיר בסיסי למוצר
+    return product.price_with_vat !== undefined && product.price_with_vat > 0;
   };
 
-  // פונקציה להצגת מחיר המוצר
+  // פונקציה לקבלת המחיר המוצג של המוצר (לפי וריאציה שנבחרה או מחיר בסיסי)
   const getProductPrice = (product: Product): number | undefined => {
     if (product.variations && product.variations.length > 0) {
+      // אם יש וריאציה נבחרת, השתמש בה
+      const selectedVariationName = selectedVariations[product.id];
+      if (selectedVariationName) {
+        const selectedVariation = product.variations.find(v => v.name === selectedVariationName);
+        if (selectedVariation) {
+          return selectedVariation.price_with_vat;
+        }
+      }
+      // אחרת השתמש בווריאציה הראשונה
       return product.variations[0].price_with_vat;
     }
     return product.price_with_vat;
@@ -195,6 +229,13 @@ const ClientProductsPage: React.FC = () => {
   return (
     <div className="p-6">
       <h2 className="text-3xl font-bold mb-6">מוצרים</h2>
+      
+      {/* הודעת הצלחה כשמוצר נוסף לסל */}
+      {showSuccessMessage && (
+        <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded z-50 shadow-lg">
+          <span className="block sm:inline">{successMessage}</span>
+        </div>
+      )}
       
       {/* תיבת חיפוש */}
       <div className="mb-6">
@@ -346,6 +387,29 @@ const ClientProductsPage: React.FC = () => {
                     <p className="text-md font-medium text-gray-400">ללא מחיר</p>
                   )}
                 </div>
+                
+                {/* בחירת וריאציות אם קיימות */}
+                {product.variations && product.variations.length > 0 && (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      בחר וריאציה:
+                    </label>
+                    <select
+                      value={selectedVariations[product.id] || product.variations[0].name}
+                      onChange={(e) => setSelectedVariations(prev => ({
+                        ...prev,
+                        [product.id]: e.target.value
+                      }))}
+                      className="block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      {product.variations.map((variation) => (
+                        <option key={variation.name} value={variation.name}>
+                          {variation.name} - {variation.price_with_vat.toFixed(2)} ₪
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 
                 {/* מרווח גמיש */}
                 <div className="flex-grow"></div>
