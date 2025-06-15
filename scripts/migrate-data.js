@@ -1,19 +1,22 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore, collection, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 
 // תצורת Firebase
 const firebaseConfig = {
-  apiKey: process.env.FIREBASE_API_KEY,
-  authDomain: "gal-brothers-inventory.firebaseapp.com",
-  projectId: "gal-brothers-inventory",
-  storageBucket: "gal-brothers-inventory.appspot.com",
-  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.FIREBASE_APP_ID
+  apiKey: "AIzaSyDurtEehM5IrQxeJmKAIyaucKqDyEy4nl0",
+  authDomain: "galbrother-1baff.firebaseapp.com",
+  projectId: "galbrother-1baff",
+  storageBucket: "galbrother-1baff.appspot.com",
+  messagingSenderId: "100731308038",
+  appId: "1:100731308038:web:a005fd238a5d50d5bb5b87",
+  measurementId: "G-1QL9EP8J5Y"
 };
 
 // אתחול Firebase
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
+const auth = getAuth(app);
 
 // פונקציה להעברת נתונים למשתמש ספציפי
 async function migrateDataToUser(email) {
@@ -62,6 +65,11 @@ async function migrateDataToUser(email) {
 // הרצת המיגרציה
 async function runMigration() {
   try {
+    // התחברות עם משתמש מנהל
+    console.log('מתחבר למערכת...');
+    await signInWithEmailAndPassword(auth, 'rotemhaha321@gmail.com', process.env.ADMIN_PASSWORD);
+    console.log('התחברות הצליחה');
+
     // העבר את כל הנתונים הקיימים ל-rotemhaha321@gmail.com
     await migrateDataToUser('rotemhaha321@gmail.com');
     console.log('המיגרציה הושלמה בהצלחה');

@@ -24,20 +24,27 @@ service cloud.firestore {
       return request.resource.data.managedBy == request.auth.token.email;
     }
 
+    // פונקציה לבדיקה אם זה עדכון של שדה managedBy בלבד
+    function isOnlyUpdatingManagedBy() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['managedBy']);
+    }
+
     // חוקים עבור לקוחות
     match /customers/{customerId} {
-      allow read: if isAdmin() && isOwnedByCurrentAdmin();
-      allow list: if isAdmin() && resource.data.managedBy == request.auth.token.email;
+      allow read: if isAdmin();
       allow create: if isAdmin() && isBeingCreatedByCurrentAdmin();
-      allow update, delete: if isAdmin() && isOwnedByCurrentAdmin();
+      allow update: if (isAdmin() && isOwnedByCurrentAdmin()) || 
+                      (isAdmin() && !resource.data.managedBy && isOnlyUpdatingManagedBy());
+      allow delete: if isAdmin() && isOwnedByCurrentAdmin();
     }
     
     // חוקים עבור הזמנות
     match /orders/{orderId} {
-      allow read: if isAdmin() && isOwnedByCurrentAdmin();
-      allow list: if isAdmin() && resource.data.managedBy == request.auth.token.email;
+      allow read: if isAdmin();
       allow create: if isAdmin() && isBeingCreatedByCurrentAdmin();
-      allow update, delete: if isAdmin() && isOwnedByCurrentAdmin();
+      allow update: if (isAdmin() && isOwnedByCurrentAdmin()) || 
+                      (isAdmin() && !resource.data.managedBy && isOnlyUpdatingManagedBy());
+      allow delete: if isAdmin() && isOwnedByCurrentAdmin();
     }
     
     // חוקים עבור מוצרים - משותפים לכל המנהלים
