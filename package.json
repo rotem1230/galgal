@@ -8,8 +8,8 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "npx vite build",
-    "vercel-build": "bash ./vercel-build.sh",
+    "build": "vite build",
+    "vercel-build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "add-categories": "node scripts/create-categories.js",
@@ -69,7 +69,9 @@
     "vaul": "^1.1.2",
     "zod": "^3.24.2",
     "@vitejs/plugin-react": "^4.2.1",
-    "vite": "^5.0.8"
+    "vite": "^5.0.8",
+    "@types/react": "^18.2.15",
+    "@types/react-dom": "^18.2.7"
   },
   "devDependencies": {
     "@eslint/js": "^9.19.0",
