@@ -7,22 +7,38 @@ service cloud.firestore {
       allow write: if false; // רק דרך קונסולת הניהול או cloud functions
     }
     
+    // פונקציה לבדיקה אם המשתמש הוא מנהל
+    function isAdmin() {
+      return request.auth != null && 
+        (request.auth.token.email == 'rotemhaha321@gmail.com' || 
+         request.auth.token.email == 'kfirgal505@gmail.com');
+    }
+
+    // פונקציה לבדיקה אם המסמך שייך למנהל הנוכחי
+    function isOwnedByCurrentAdmin() {
+      return resource.data.managedBy == request.auth.token.email;
+    }
+
+    // פונקציה לבדיקה אם המסמך החדש מוגדר כשייך למנהל הנוכחי
+    function isBeingCreatedByCurrentAdmin() {
+      return request.resource.data.managedBy == request.auth.token.email;
+    }
+
     // חוקים לקולקציית הלקוחות
-    match /customers/{document=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && (isAdmin() || isHardcodedAdmin()); 
+    match /customers/{customerId} {
+      allow read: if isAdmin() && isOwnedByCurrentAdmin();
+      allow create: if isAdmin() && isBeingCreatedByCurrentAdmin();
+      allow update, delete: if isAdmin() && isOwnedByCurrentAdmin();
     }
     
     // חוקים לקולקציית המוצרים
-    match /products/{document=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && (isAdmin() || isHardcodedAdmin());
+    match /products/{productId} {
+      allow read, write: if isAdmin();
     }
     
     // חוקים לקולקציית הקטגוריות
-    match /categories/{document=**} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && (isAdmin() || isHardcodedAdmin());
+    match /categories/{categoryId} {
+      allow read, write: if isAdmin();
     }
     
     // חוקים לקולקציית מחירי לקוחות
@@ -33,43 +49,14 @@ service cloud.firestore {
     
     // חוקים לקולקציית ההזמנות - שאילתות רשימה וגישה למסמכים
     match /orders/{orderId} {
-      // כלל כללי - משתמשים מאומתים יכולים לקרוא הזמנות, אבל בפועל 
-      // רק הזמנות שעומדות בתנאים יוחזרו לפי כללי האבטחה
-      allow read: if request.auth != null;
-      
-      // יצירה - כל משתמש מאומת יכול ליצור הזמנה כל עוד הוא בעל ההזמנה
-      allow create: if request.auth != null && (
-        request.resource.data.userId == request.auth.uid || 
-        request.resource.data.customer_id == request.auth.uid
-      );
-      
-      // עדכון - מנהלים או בעלי ההזמנה יכולים לעדכן הזמנה
-      allow update: if request.auth != null && (
-        isAdmin() || 
-        isHardcodedAdmin() || 
-        resource.data.userId == request.auth.uid || 
-        resource.data.customer_id == request.auth.uid
-      );
-      
-      // מחיקה - מנהלים או בעלי ההזמנה יכולים למחוק הזמנה
-      allow delete: if request.auth != null && (
-        isAdmin() || 
-        isHardcodedAdmin() || 
-        resource.data.userId == request.auth.uid || 
-        resource.data.customer_id == request.auth.uid
-      );
+      allow read: if isAdmin() && isOwnedByCurrentAdmin();
+      allow create: if isAdmin() && isBeingCreatedByCurrentAdmin();
+      allow update, delete: if isAdmin() && isOwnedByCurrentAdmin();
     }
     
     // פונקציה שמחזירה אם המשתמש הוא מנהל מערכת מוגדר בקוד
     function isHardcodedAdmin() {
       return request.auth != null && request.auth.token.email == 'rotemhaha321@gmail.com';
-    }
-    
-    // פונקציה לבדיקה אם המשתמש הוא מנהל
-    function isAdmin() {
-      return request.auth != null && 
-        (request.auth.token.email == 'rotemhaha321@gmail.com' || 
-         request.auth.token.email == 'kfirgal505@gmail.com');
     }
   }
 } 
