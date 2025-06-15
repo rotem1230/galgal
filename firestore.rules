@@ -1,7 +1,0 @@
-// פונקציה שמחזירה אם המשתמש הוא מנהל מערכת מוגדר בקוד
-function isHardcodedAdmin() {
-  return request.auth != null && (
-    request.auth.token.email == 'rotemhaha321@gmail.com' ||
-    request.auth.token.email == 'kfirgal505@gmail.com'
-  );
-} 
