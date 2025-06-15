@@ -1,0 +1,13 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // פונקציה לבדיקה אם המשתמש הוא מנהל
+    function isAdmin() {
+      return request.auth != null && 
+        (request.auth.token.email == 'rotemhaha321@gmail.com' || 
+         request.auth.token.email == 'kfirgal505@gmail.com');
+    }
+    
+    // ... existing code ...
+  }
+} 
