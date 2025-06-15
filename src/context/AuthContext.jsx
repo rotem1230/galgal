@@ -21,33 +21,14 @@ export const AuthProvider = ({ children }) => {
   // פונקציה לבדיקה אם משתמש הוא מנהל
   const checkIfUserIsAdmin = async (email) => {
     try {
-      // בדיקה אם המייל הוא של מנהל ידוע מערכת (הרשאה קבועה בקוד)
-      if (email === 'rotemhaha321@gmail.com') {
-        console.log("זוהה משתמש מנהל קבוע במערכת:", email);
+      if (email === 'rotemhaha321@gmail.com' || email === 'kfirgal505@gmail.com') {
+        console.log(`המשתמש ${email} זוהה כמנהל`);
         return true;
       }
-      
-      // ניסיון קריאה ממסמך ההרשאות (אם יש הרשאות פיירבייס מתאימות)
-      try {
-        const userRoleRef = doc(db, "userRoles", email);
-        const userRoleSnap = await getDoc(userRoleRef);
-        
-        if (userRoleSnap.exists()) {
-          const isUserAdmin = userRoleSnap.data().role === "admin";
-          console.log(`בדיקת הרשאות ב-Firestore עבור ${email}: ${isUserAdmin ? 'מנהל' : 'לא מנהל'}`);
-          return isUserAdmin;
-        } else {
-          console.log(`לא נמצא מסמך הרשאות ב-Firestore עבור ${email}`);
-        }
-      } catch (error) {
-        console.error("שגיאה בבדיקת הרשאות מול הדאטאבייס:", error);
-        // ממשיכים הלאה - אם זה מנהל קבוע, נחזיר true בכל מקרה
-      }
-      
-      // אם הגענו לכאן והמשתמש לא מנהל קבוע ולא נמצא בדאטאבייס, נחזיר false
+      console.log(`המשתמש ${email} אינו מנהל`);
       return false;
     } catch (error) {
-      console.error("Error checking admin status:", error);
+      console.error('שגיאה בבדיקת הרשאות מנהל:', error);
       return false;
     }
   };

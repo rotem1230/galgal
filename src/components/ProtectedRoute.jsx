@@ -18,8 +18,8 @@ const ProtectedRoute = ({ children }) => {
       }
       
       // אם זה המשתמש המיוחד שלנו, לא צריך לבדוק אם הוא לקוח
-      if (currentUser.email === 'rotemhaha321@gmail.com') {
-        console.log("זיהינו את המשתמש המיוחד rotemhaha321@gmail.com - מאפשר גישה");
+      if (currentUser.email === 'rotemhaha321@gmail.com' || currentUser.email === 'kfirgal505@gmail.com') {
+        console.log(`זיהינו את המשתמש המיוחד ${currentUser.email} - מאפשר גישה`);
         setIsCustomer(false);
         setLoading(false);
         return;

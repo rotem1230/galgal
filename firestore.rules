@@ -65,10 +65,11 @@ service cloud.firestore {
       return request.auth != null && request.auth.token.email == 'rotemhaha321@gmail.com';
     }
     
-    // בדיקה אם המשתמש הוא מנהל מערכת
+    // פונקציה לבדיקה אם המשתמש הוא מנהל
     function isAdmin() {
-      return exists(/databases/$(database)/documents/userRoles/$(request.auth.token.email)) &&
-        get(/databases/$(database)/documents/userRoles/$(request.auth.token.email)).data.role == 'admin';
+      return request.auth != null && 
+        (request.auth.token.email == 'rotemhaha321@gmail.com' || 
+         request.auth.token.email == 'kfirgal505@gmail.com');
     }
   }
 } 
