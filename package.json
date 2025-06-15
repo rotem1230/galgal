@@ -2,13 +2,13 @@
   "name": "base44-app",
   "private": true,
   "version": "0.0.0",
-  "type": "commonjs",
+  "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "add-categories": "node scripts/create-categories.js"
+    "migrate-data": "node scripts/migrate-data.js"
   },
   "dependencies": {
     "@base44/sdk": "^0.1.2",
