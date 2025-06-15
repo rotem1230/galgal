@@ -24,19 +24,28 @@ service cloud.firestore {
       return request.resource.data.managedBy == request.auth.token.email;
     }
 
-    // חוקים לקולקציית הלקוחות
+    // חוקים עבור לקוחות
     match /customers/{customerId} {
       allow read: if isAdmin() && isOwnedByCurrentAdmin();
+      allow list: if isAdmin() && resource.data.managedBy == request.auth.token.email;
       allow create: if isAdmin() && isBeingCreatedByCurrentAdmin();
       allow update, delete: if isAdmin() && isOwnedByCurrentAdmin();
     }
     
-    // חוקים לקולקציית המוצרים
+    // חוקים עבור הזמנות
+    match /orders/{orderId} {
+      allow read: if isAdmin() && isOwnedByCurrentAdmin();
+      allow list: if isAdmin() && resource.data.managedBy == request.auth.token.email;
+      allow create: if isAdmin() && isBeingCreatedByCurrentAdmin();
+      allow update, delete: if isAdmin() && isOwnedByCurrentAdmin();
+    }
+    
+    // חוקים עבור מוצרים - משותפים לכל המנהלים
     match /products/{productId} {
       allow read, write: if isAdmin();
     }
     
-    // חוקים לקולקציית הקטגוריות
+    // חוקים עבור קטגוריות - משותפות לכל המנהלים
     match /categories/{categoryId} {
       allow read, write: if isAdmin();
     }
@@ -45,13 +54,6 @@ service cloud.firestore {
     match /customer_pricing/{document=**} {
       allow read: if request.auth != null;
       allow write: if request.auth != null && (isAdmin() || isHardcodedAdmin());
-    }
-    
-    // חוקים לקולקציית ההזמנות - שאילתות רשימה וגישה למסמכים
-    match /orders/{orderId} {
-      allow read: if isAdmin() && isOwnedByCurrentAdmin();
-      allow create: if isAdmin() && isBeingCreatedByCurrentAdmin();
-      allow update, delete: if isAdmin() && isOwnedByCurrentAdmin();
     }
     
     // פונקציה שמחזירה אם המשתמש הוא מנהל מערכת מוגדר בקוד

@@ -1,3 +1,7 @@
+import { collection, query, where, orderBy, getDocs, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
+import { db } from '../firebase-config';
+
 export const createCustomer = async (customerData) => {
   try {
     const auth = getAuth();
@@ -27,6 +31,11 @@ export const updateCustomer = async (customerId, customerData) => {
     const currentUser = auth.currentUser;
     if (!currentUser) throw new Error('משתמש לא מחובר');
 
+    const customerDoc = await getDocs(customerRef);
+    if (!customerDoc.exists() || customerDoc.data().managedBy !== currentUser.email) {
+      throw new Error('אין הרשאה לעדכן לקוח זה');
+    }
+
     const customerWithMetadata = {
       ...customerData,
       updatedAt: serverTimestamp()
@@ -46,6 +55,8 @@ export const getCustomers = async () => {
     const currentUser = auth.currentUser;
     if (!currentUser) throw new Error('משתמש לא מחובר');
 
+    console.log(`מביא לקוחות עבור המשתמש: ${currentUser.email}`);
+
     const customersQuery = query(
       collection(db, 'customers'),
       where('managedBy', '==', currentUser.email),
@@ -57,6 +68,8 @@ export const getCustomers = async () => {
     querySnapshot.forEach((doc) => {
       customers.push({ id: doc.id, ...doc.data() });
     });
+
+    console.log(`נמצאו ${customers.length} לקוחות למשתמש ${currentUser.email}`);
     return customers;
   } catch (error) {
     console.error('שגיאה בקבלת רשימת לקוחות:', error);

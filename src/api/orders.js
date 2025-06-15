@@ -1,3 +1,7 @@
+import { collection, query, where, orderBy, getDocs, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
+import { db } from '../firebase-config';
+
 export const createOrder = async (orderData) => {
   try {
     const auth = getAuth();
@@ -28,6 +32,11 @@ export const updateOrder = async (orderId, orderData) => {
     const currentUser = auth.currentUser;
     if (!currentUser) throw new Error('משתמש לא מחובר');
 
+    const orderDoc = await getDocs(orderRef);
+    if (!orderDoc.exists() || orderDoc.data().managedBy !== currentUser.email) {
+      throw new Error('אין הרשאה לעדכן הזמנה זו');
+    }
+
     const orderWithMetadata = {
       ...orderData,
       updatedAt: serverTimestamp()
@@ -47,6 +56,8 @@ export const getOrders = async () => {
     const currentUser = auth.currentUser;
     if (!currentUser) throw new Error('משתמש לא מחובר');
 
+    console.log(`מביא הזמנות עבור המשתמש: ${currentUser.email}`);
+
     const ordersQuery = query(
       collection(db, 'orders'),
       where('managedBy', '==', currentUser.email),
@@ -58,6 +69,8 @@ export const getOrders = async () => {
     querySnapshot.forEach((doc) => {
       orders.push({ id: doc.id, ...doc.data() });
     });
+
+    console.log(`נמצאו ${orders.length} הזמנות למשתמש ${currentUser.email}`);
     return orders;
   } catch (error) {
     console.error('שגיאה בקבלת רשימת הזמנות:', error);
