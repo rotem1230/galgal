@@ -3,13 +3,16 @@
   "builds": [
     {
       "src": "package.json",
-      "use": "@vercel/static-build",
+      "use": "@vercel/node",
       "config": {
-        "distDir": "dist"
+        "maxLambdaSize": "50mb"
       }
     }
   ],
   "routes": [
+    {
+      "handle": "filesystem"
+    },
     {
       "src": "/assets/(.*)",
       "dest": "/assets/$1"
