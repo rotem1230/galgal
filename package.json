@@ -4,11 +4,11 @@
   "version": "0.0.0",
   "type": "commonjs",
   "engines": {
-    "node": "18.x"
+    "node": ">=18.0.0"
   },
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "NODE_ENV=production vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "add-categories": "node scripts/create-categories.js",
